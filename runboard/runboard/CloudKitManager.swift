@@ -22,18 +22,9 @@ struct BoardMember: Identifiable, Codable {
 @Observable
 final class CloudKitManager {
     var members: [BoardMember] = []
-    var currentBoardCode: String? {
-        get { UserDefaults.standard.string(forKey: "boardCode") }
-        set { UserDefaults.standard.set(newValue, forKey: "boardCode") }
-    }
-    var myRecordName: String? {
-        get { UserDefaults.standard.string(forKey: "myRecordName") }
-        set { UserDefaults.standard.set(newValue, forKey: "myRecordName") }
-    }
-    var myDisplayName: String? {
-        get { UserDefaults.standard.string(forKey: "displayName") }
-        set { UserDefaults.standard.set(newValue, forKey: "displayName") }
-    }
+    var currentBoardCode: String?
+    var myRecordName: String?
+    var myDisplayName: String?
     var isLoading = false
     var errorMessage: String?
 
@@ -41,6 +32,18 @@ final class CloudKitManager {
     private var database: CKDatabase { container.publicCloudDatabase }
 
     var hasBoard: Bool { currentBoardCode != nil }
+
+    init() {
+        currentBoardCode = UserDefaults.standard.string(forKey: "boardCode")
+        myRecordName = UserDefaults.standard.string(forKey: "myRecordName")
+        myDisplayName = UserDefaults.standard.string(forKey: "displayName")
+    }
+
+    private func persist() {
+        UserDefaults.standard.set(currentBoardCode, forKey: "boardCode")
+        UserDefaults.standard.set(myRecordName, forKey: "myRecordName")
+        UserDefaults.standard.set(myDisplayName, forKey: "displayName")
+    }
 
     // MARK: - Board Operations
 
@@ -58,6 +61,7 @@ final class CloudKitManager {
         currentBoardCode = code
         myRecordName = saved.recordID.recordName
         myDisplayName = displayName
+        persist()
     }
 
     func joinBoard(code: String, displayName: String) async throws {
@@ -84,6 +88,7 @@ final class CloudKitManager {
         currentBoardCode = upperCode
         myRecordName = saved.recordID.recordName
         myDisplayName = displayName
+        persist()
     }
 
     func fetchBoardMembers() async {
