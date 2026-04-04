@@ -154,6 +154,7 @@ final class CloudKitManager {
         currentBoardCode = nil
         myRecordName = nil
         myDisplayName = nil
+        persist()
         members = []
         clearCache()
     }
