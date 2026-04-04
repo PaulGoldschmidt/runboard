@@ -320,24 +320,37 @@ struct DashboardView: View {
                         .tracking(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    ForEach(appState.cloudKit.members) { member in
-                        HStack {
-                            Text(member.displayName.uppercased())
-                                .font(Theme.body)
-                                .foregroundStyle(.white)
-                                .tracking(1)
-                            Spacer()
-                            if member.isCurrentUser {
-                                Text("YOU")
-                                    .font(Theme.font(12))
-                                    .foregroundStyle(Theme.accent)
-                                    .tracking(2)
+                    List {
+                        ForEach(appState.cloudKit.members) { member in
+                            HStack {
+                                Text(member.displayName.uppercased())
+                                    .font(Theme.body)
+                                    .foregroundStyle(.white)
+                                    .tracking(1)
+                                Spacer()
+                                if member.isCurrentUser {
+                                    Text("YOU")
+                                        .font(Theme.font(12))
+                                        .foregroundStyle(Theme.accent)
+                                        .tracking(2)
+                                }
+                            }
+                            .listRowBackground(Theme.cardBackground)
+                        }
+                        .onDelete { offsets in
+                            let removable = appState.cloudKit.members.filter { !$0.isCurrentUser }
+                            // Map from visible non-self members isn't needed — just use all members
+                            for index in offsets {
+                                let member = appState.cloudKit.members[index]
+                                guard !member.isCurrentUser else { continue }
+                                Task { await appState.cloudKit.removeMember(member) }
                             }
                         }
-                        .padding(12)
-                        .background(Theme.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: CGFloat(appState.cloudKit.members.count) * 48)
+                    .deleteDisabled(!appState.cloudKit.isCreator)
                 }
 
                 Spacer()
