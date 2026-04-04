@@ -171,7 +171,7 @@ struct DashboardView: View {
 
                 if member.isCurrentUser {
                     Text("YOU")
-                        .font(Theme.font(9))
+                        .font(Theme.font(12))
                         .foregroundStyle(Theme.accent)
                         .tracking(2)
                 }
@@ -187,7 +187,7 @@ struct DashboardView: View {
                         .font(Theme.headline)
                         .foregroundStyle(.white)
                     Text("KM")
-                        .font(Theme.font(9))
+                        .font(Theme.font(12))
                         .foregroundStyle(Theme.dimText)
                         .tracking(2)
                 case .vo2Max:
@@ -196,7 +196,7 @@ struct DashboardView: View {
                             .font(Theme.headline)
                             .foregroundStyle(.white)
                         Text("ML/KG/MIN")
-                            .font(Theme.font(9))
+                            .font(Theme.font(12))
                             .foregroundStyle(Theme.dimText)
                             .tracking(1)
                     } else {
@@ -204,7 +204,7 @@ struct DashboardView: View {
                             .font(Theme.headline)
                             .foregroundStyle(Theme.dimText)
                         Text("NO DATA")
-                            .font(Theme.font(9))
+                            .font(Theme.font(12))
                             .foregroundStyle(Theme.dimText)
                             .tracking(1)
                     }
@@ -258,7 +258,7 @@ struct DashboardView: View {
                             .tracking(2)
 
                         Text(code)
-                            .font(Theme.font(32))
+                            .font(Theme.font(40))
                             .foregroundStyle(Theme.accent)
                             .tracking(6)
 
@@ -280,6 +280,39 @@ struct DashboardView: View {
                     .padding(.vertical, 20)
                 }
 
+                if appState.cloudKit.boardCreatorName != nil || appState.cloudKit.boardCreatedDate != nil {
+                    VStack(spacing: 6) {
+                        if let creator = appState.cloudKit.boardCreatorName {
+                            HStack(spacing: 6) {
+                                Text("CREATED BY")
+                                    .font(Theme.caption)
+                                    .foregroundStyle(Theme.dimText)
+                                    .tracking(1)
+                                Text(creator.uppercased())
+                                    .font(Theme.caption)
+                                    .foregroundStyle(.white)
+                                    .tracking(1)
+                            }
+                        }
+                        if let date = appState.cloudKit.boardCreatedDate {
+                            HStack(spacing: 6) {
+                                Text("ON")
+                                    .font(Theme.caption)
+                                    .foregroundStyle(Theme.dimText)
+                                    .tracking(1)
+                                Text(date.formatted(date: .abbreviated, time: .omitted).uppercased())
+                                    .font(Theme.caption)
+                                    .foregroundStyle(.white)
+                                    .tracking(1)
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity)
+                    .background(Theme.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
                 VStack(spacing: 8) {
                     Text("MEMBERS")
                         .font(Theme.caption)
@@ -296,7 +329,7 @@ struct DashboardView: View {
                             Spacer()
                             if member.isCurrentUser {
                                 Text("YOU")
-                                    .font(Theme.font(9))
+                                    .font(Theme.font(12))
                                     .foregroundStyle(Theme.accent)
                                     .tracking(2)
                             }

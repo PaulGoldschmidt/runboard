@@ -14,10 +14,10 @@ enum Theme {
         .custom(fontName, size: size)
     }
 
-    static let title = font(28)
-    static let headline = font(20)
-    static let body = font(14)
-    static let caption = font(11)
+    static let title = font(36)
+    static let headline = font(26)
+    static let body = font(18)
+    static let caption = font(14)
 
     static let accent = Color(red: 0.2, green: 1.0, blue: 0.4)
     static let secondaryAccent = Color(red: 0.3, green: 0.8, blue: 1.0)

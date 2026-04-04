@@ -236,7 +236,7 @@ struct BoardSetupView: View {
                 .tracking(2)
 
             Text(code)
-                .font(Theme.font(40))
+                .font(Theme.font(48))
                 .foregroundStyle(Theme.accent)
                 .tracking(8)
 

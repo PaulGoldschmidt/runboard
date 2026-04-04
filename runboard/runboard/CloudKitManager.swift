@@ -25,6 +25,8 @@ final class CloudKitManager {
     var currentBoardCode: String?
     var myRecordName: String?
     var myDisplayName: String?
+    var boardCreatorName: String?
+    var boardCreatedDate: Date?
     var isLoading = false
     var errorMessage: String?
 
@@ -55,12 +57,15 @@ final class CloudKitManager {
         record["vo2Max"] = 0.0
         record["weeklyKilometers"] = 0.0
         record["lastUpdated"] = Date()
+        record["isCreator"] = 1
 
         let saved = try await database.save(record)
 
         currentBoardCode = code
         myRecordName = saved.recordID.recordName
         myDisplayName = displayName
+        boardCreatorName = displayName
+        boardCreatedDate = Date()
         persist()
     }
 
@@ -121,6 +126,17 @@ final class CloudKitManager {
             }
 
             members = fetched
+
+            // Find board creator info
+            for (_, result) in results {
+                if case .success(let record) = result,
+                   (record["isCreator"] as? Int64) == 1 {
+                    boardCreatorName = record["displayName"] as? String
+                    boardCreatedDate = record.creationDate
+                    break
+                }
+            }
+
             cacheMembers(fetched)
             errorMessage = nil
         } catch {
