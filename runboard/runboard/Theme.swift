@@ -8,7 +8,7 @@
 import SwiftUI
 
 enum Theme {
-    static let fontName = "GeistPixel-Square"
+    static let fontName = "GeistPixel-Circle"
 
     static func font(_ size: CGFloat) -> Font {
         .custom(fontName, size: size)
