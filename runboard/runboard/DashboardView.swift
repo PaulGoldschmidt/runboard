@@ -320,33 +320,36 @@ struct DashboardView: View {
                         .tracking(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    ForEach(appState.cloudKit.members) { member in
-                        HStack {
-                            Text(member.displayName.uppercased())
-                                .font(Theme.body)
-                                .foregroundStyle(.white)
-                                .tracking(1)
-                            Spacer()
-                            if member.isCurrentUser {
-                                Text("YOU")
-                                    .font(Theme.font(12))
-                                    .foregroundStyle(Theme.accent)
-                                    .tracking(2)
+                    List {
+                        ForEach(appState.cloudKit.members) { member in
+                            HStack {
+                                Text(member.displayName.uppercased())
+                                    .font(Theme.body)
+                                    .foregroundStyle(.white)
+                                    .tracking(1)
+                                Spacer()
+                                if member.isCurrentUser {
+                                    Text("YOU")
+                                        .font(Theme.font(12))
+                                        .foregroundStyle(Theme.accent)
+                                        .tracking(2)
+                                }
                             }
-                        }
-                        .padding(12)
-                        .background(Theme.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .swipeActions(edge: .trailing) {
-                            if appState.cloudKit.isCreator && !member.isCurrentUser {
-                                Button(role: .destructive) {
-                                    Task { await appState.cloudKit.removeMember(member) }
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
+                            .listRowBackground(Theme.cardBackground)
+                            .swipeActions(edge: .trailing) {
+                                if appState.cloudKit.isCreator && !member.isCurrentUser {
+                                    Button(role: .destructive) {
+                                        Task { await appState.cloudKit.removeMember(member) }
+                                    } label: {
+                                        Label("Remove", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: CGFloat(appState.cloudKit.members.count) * 48)
                 }
 
                 Spacer()

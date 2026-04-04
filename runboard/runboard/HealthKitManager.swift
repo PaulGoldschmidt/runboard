@@ -29,6 +29,7 @@ final class HealthKitManager {
     }
 
     func requestAuthorization() async {
+        guard status == .notDetermined else { return }
         guard isAvailable else {
             status = .unavailable
             return
@@ -109,7 +110,8 @@ final class HealthKitManager {
     }
 
     func refreshAll() async {
-        await fetchLatestVO2Max()
-        await fetchWeeklyRunningDistance()
+        async let vo2 = fetchLatestVO2Max()
+        async let distance = fetchWeeklyRunningDistance()
+        _ = await (vo2, distance)
     }
 }

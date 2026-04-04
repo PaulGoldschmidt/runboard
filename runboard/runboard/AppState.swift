@@ -19,10 +19,11 @@ final class AppState {
 
     func refreshAndSync() async {
         await healthKit.refreshAll()
-        await cloudKit.updateMyStats(
+        async let upload: Void = cloudKit.updateMyStats(
             vo2Max: healthKit.vo2Max,
             weeklyKilometers: healthKit.weeklyRunningKilometers
         )
-        await cloudKit.fetchBoardMembers()
+        async let fetch: Void = cloudKit.fetchBoardMembers()
+        _ = await (upload, fetch)
     }
 }

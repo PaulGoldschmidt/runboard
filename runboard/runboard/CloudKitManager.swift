@@ -9,13 +9,30 @@ import Foundation
 import CloudKit
 import Observation
 
-struct BoardMember: Identifiable, Codable {
+struct BoardMember: Identifiable, Codable, Equatable {
     let id: String
     var displayName: String
     var vo2Max: Double?
     var weeklyKilometers: Double
     var lastUpdated: Date
     var isCurrentUser: Bool = false
+}
+
+private enum Keys {
+    static let boardCode = "boardCode"
+    static let myRecordName = "myRecordName"
+    static let displayName = "displayName"
+    static let cachedMembers = "cachedMembers"
+}
+
+private enum RecordField {
+    static let displayName = "displayName"
+    static let vo2Max = "vo2Max"
+    static let weeklyKilometers = "weeklyKilometers"
+    static let lastUpdated = "lastUpdated"
+    static let creatorName = "creatorName"
+    static let creatorRecordName = "creatorRecordName"
+    static let memberRecordNames = "memberRecordNames"
 }
 
 @Observable
@@ -25,6 +42,7 @@ final class CloudKitManager {
     var myRecordName: String?
     var myDisplayName: String?
     var boardCreatorName: String?
+    var boardCreatorRecordName: String?
     var boardCreatedDate: Date?
     var isLoading = false
     var errorMessage: String?
@@ -33,18 +51,18 @@ final class CloudKitManager {
     private var database: CKDatabase { container.publicCloudDatabase }
 
     var hasBoard: Bool { currentBoardCode != nil }
-    var isCreator: Bool { myDisplayName != nil && myDisplayName == boardCreatorName }
+    var isCreator: Bool { myRecordName != nil && myRecordName == boardCreatorRecordName }
 
     init() {
-        currentBoardCode = UserDefaults.standard.string(forKey: "boardCode")
-        myRecordName = UserDefaults.standard.string(forKey: "myRecordName")
-        myDisplayName = UserDefaults.standard.string(forKey: "displayName")
+        currentBoardCode = UserDefaults.standard.string(forKey: Keys.boardCode)
+        myRecordName = UserDefaults.standard.string(forKey: Keys.myRecordName)
+        myDisplayName = UserDefaults.standard.string(forKey: Keys.displayName)
     }
 
     private func persist() {
-        UserDefaults.standard.set(currentBoardCode, forKey: "boardCode")
-        UserDefaults.standard.set(myRecordName, forKey: "myRecordName")
-        UserDefaults.standard.set(myDisplayName, forKey: "displayName")
+        UserDefaults.standard.set(currentBoardCode, forKey: Keys.boardCode)
+        UserDefaults.standard.set(myRecordName, forKey: Keys.myRecordName)
+        UserDefaults.standard.set(myDisplayName, forKey: Keys.displayName)
     }
 
     // MARK: - Board Operations
@@ -52,28 +70,24 @@ final class CloudKitManager {
     func createBoard(displayName: String) async throws {
         let code = generateBoardCode()
 
-        // Create the member record with a deterministic ID
         let memberID = CKRecord.ID(recordName: "\(code)_\(UUID().uuidString)")
-        let memberRecord = CKRecord(recordType: "BoardMember", recordID: memberID)
-        memberRecord["displayName"] = displayName
-        memberRecord["vo2Max"] = 0.0
-        memberRecord["weeklyKilometers"] = 0.0
-        memberRecord["lastUpdated"] = Date()
+        let memberRecord = makeMemberRecord(id: memberID, displayName: displayName)
 
-        // Create the board record with the code as its record ID
         let boardID = CKRecord.ID(recordName: code)
         let boardRecord = CKRecord(recordType: "Board", recordID: boardID)
-        boardRecord["creatorName"] = displayName
-        boardRecord["memberRecordNames"] = [memberID.recordName] as [String]
+        boardRecord[RecordField.creatorName] = displayName
+        boardRecord[RecordField.creatorRecordName] = memberID.recordName
+        boardRecord[RecordField.memberRecordNames] = [memberID.recordName] as [String]
 
-        // Save both
-        try await database.save(memberRecord)
-        try await database.save(boardRecord)
+        async let saveMember: Void = { _ = try await self.database.save(memberRecord) }()
+        async let saveBoard: Void = { _ = try await self.database.save(boardRecord) }()
+        _ = try await (saveMember, saveBoard)
 
         currentBoardCode = code
         myRecordName = memberID.recordName
         myDisplayName = displayName
         boardCreatorName = displayName
+        boardCreatorRecordName = memberID.recordName
         boardCreatedDate = Date()
         persist()
     }
@@ -82,7 +96,6 @@ final class CloudKitManager {
         let upperCode = code.uppercased()
         let boardID = CKRecord.ID(recordName: upperCode)
 
-        // Fetch the board record by ID — no query needed
         let boardRecord: CKRecord
         do {
             boardRecord = try await database.record(for: boardID)
@@ -90,20 +103,13 @@ final class CloudKitManager {
             throw BoardError.boardNotFound
         }
 
-        // Create the member record
         let memberID = CKRecord.ID(recordName: "\(upperCode)_\(UUID().uuidString)")
-        let memberRecord = CKRecord(recordType: "BoardMember", recordID: memberID)
-        memberRecord["displayName"] = displayName
-        memberRecord["vo2Max"] = 0.0
-        memberRecord["weeklyKilometers"] = 0.0
-        memberRecord["lastUpdated"] = Date()
-
+        let memberRecord = makeMemberRecord(id: memberID, displayName: displayName)
         try await database.save(memberRecord)
 
-        // Add to the board's member list
-        var memberNames = (boardRecord["memberRecordNames"] as? [String]) ?? []
+        var memberNames = (boardRecord[RecordField.memberRecordNames] as? [String]) ?? []
         memberNames.append(memberID.recordName)
-        boardRecord["memberRecordNames"] = memberNames as [String]
+        boardRecord[RecordField.memberRecordNames] = memberNames as [String]
         try await database.save(boardRecord)
 
         currentBoardCode = upperCode
@@ -119,39 +125,22 @@ final class CloudKitManager {
         defer { isLoading = false }
 
         do {
-            // Fetch the board record by ID
             let boardID = CKRecord.ID(recordName: code)
             let boardRecord = try await database.record(for: boardID)
 
-            boardCreatorName = boardRecord["creatorName"] as? String
+            boardCreatorName = boardRecord[RecordField.creatorName] as? String
+            boardCreatorRecordName = boardRecord[RecordField.creatorRecordName] as? String
             boardCreatedDate = boardRecord.creationDate
 
-            // Get the member record names
-            let memberNames = (boardRecord["memberRecordNames"] as? [String]) ?? []
-
-            // Fetch each member by ID
+            let memberNames = (boardRecord[RecordField.memberRecordNames] as? [String]) ?? []
             let memberIDs = memberNames.map { CKRecord.ID(recordName: $0) }
-            var fetched: [BoardMember] = []
 
-            for memberID in memberIDs {
-                do {
-                    let record = try await database.record(for: memberID)
-                    let member = BoardMember(
-                        id: memberID.recordName,
-                        displayName: record["displayName"] as? String ?? "Unknown",
-                        vo2Max: zeroToNil(record["vo2Max"] as? Double),
-                        weeklyKilometers: record["weeklyKilometers"] as? Double ?? 0.0,
-                        lastUpdated: record["lastUpdated"] as? Date ?? Date(),
-                        isCurrentUser: memberID.recordName == myRecordName
-                    )
-                    fetched.append(member)
-                } catch {
-                    // Member record may have been deleted — skip it
-                }
+            let fetched = await fetchMemberRecords(ids: memberIDs)
+
+            if members != fetched {
+                members = fetched
+                cacheMembers(fetched)
             }
-
-            members = fetched
-            cacheMembers(fetched)
             errorMessage = nil
         } catch {
             errorMessage = "Could not load board."
@@ -166,9 +155,9 @@ final class CloudKitManager {
 
         do {
             let record = try await database.record(for: recordID)
-            record["vo2Max"] = vo2Max ?? 0.0
-            record["weeklyKilometers"] = weeklyKilometers
-            record["lastUpdated"] = Date()
+            record[RecordField.vo2Max] = vo2Max.map { $0 as CKRecordValue }
+            record[RecordField.weeklyKilometers] = weeklyKilometers
+            record[RecordField.lastUpdated] = Date()
             try await database.save(record)
         } catch {
             errorMessage = "Could not sync your stats."
@@ -176,25 +165,15 @@ final class CloudKitManager {
     }
 
     func leaveBoard() async {
-        // Remove member record from board's list
         if let code = currentBoardCode, let recordName = myRecordName {
-            let boardID = CKRecord.ID(recordName: code)
-            if let boardRecord = try? await database.record(for: boardID) {
-                var memberNames = (boardRecord["memberRecordNames"] as? [String]) ?? []
-                memberNames.removeAll { $0 == recordName }
-                boardRecord["memberRecordNames"] = memberNames as [String]
-                _ = try? await database.save(boardRecord)
-            }
-
-            // Delete member record
-            let memberID = CKRecord.ID(recordName: recordName)
-            _ = try? await database.deleteRecord(withID: memberID)
+            await removeMemberFromBoard(memberRecordName: recordName, boardCode: code)
         }
 
         currentBoardCode = nil
         myRecordName = nil
         myDisplayName = nil
         boardCreatorName = nil
+        boardCreatorRecordName = nil
         boardCreatedDate = nil
         persist()
         members = []
@@ -204,44 +183,72 @@ final class CloudKitManager {
     func removeMember(_ member: BoardMember) async {
         guard isCreator, !member.isCurrentUser, let code = currentBoardCode else { return }
 
-        // Remove from board's member list
-        let boardID = CKRecord.ID(recordName: code)
-        if let boardRecord = try? await database.record(for: boardID) {
-            var memberNames = (boardRecord["memberRecordNames"] as? [String]) ?? []
-            memberNames.removeAll { $0 == member.id }
-            boardRecord["memberRecordNames"] = memberNames as [String]
-            _ = try? await database.save(boardRecord)
-        }
+        await removeMemberFromBoard(memberRecordName: member.id, boardCode: code)
 
-        // Delete the member's record
-        let memberID = CKRecord.ID(recordName: member.id)
-        _ = try? await database.deleteRecord(withID: memberID)
-
-        // Update local state
         members.removeAll { $0.id == member.id }
         cacheMembers(members)
     }
 
-    // MARK: - Helpers
+    // MARK: - Private Helpers
+
+    private func makeMemberRecord(id: CKRecord.ID, displayName: String) -> CKRecord {
+        let record = CKRecord(recordType: "BoardMember", recordID: id)
+        record[RecordField.displayName] = displayName
+        record[RecordField.weeklyKilometers] = 0.0
+        record[RecordField.lastUpdated] = Date()
+        return record
+    }
+
+    private func removeMemberFromBoard(memberRecordName: String, boardCode: String) async {
+        let boardID = CKRecord.ID(recordName: boardCode)
+        if let boardRecord = try? await database.record(for: boardID) {
+            var names = (boardRecord[RecordField.memberRecordNames] as? [String]) ?? []
+            names.removeAll { $0 == memberRecordName }
+            boardRecord[RecordField.memberRecordNames] = names as [String]
+            _ = try? await database.save(boardRecord)
+        }
+
+        let memberID = CKRecord.ID(recordName: memberRecordName)
+        _ = try? await database.deleteRecord(withID: memberID)
+    }
+
+    private func fetchMemberRecords(ids: [CKRecord.ID]) async -> [BoardMember] {
+        await withTaskGroup(of: BoardMember?.self) { group in
+            for memberID in ids {
+                group.addTask {
+                    guard let record = try? await self.database.record(for: memberID) else { return nil }
+                    return BoardMember(
+                        id: memberID.recordName,
+                        displayName: record[RecordField.displayName] as? String ?? "Unknown",
+                        vo2Max: record[RecordField.vo2Max] as? Double,
+                        weeklyKilometers: record[RecordField.weeklyKilometers] as? Double ?? 0.0,
+                        lastUpdated: record[RecordField.lastUpdated] as? Date ?? Date(),
+                        isCurrentUser: memberID.recordName == self.myRecordName
+                    )
+                }
+            }
+
+            var results: [BoardMember] = []
+            for await member in group {
+                if let member { results.append(member) }
+            }
+            return results
+        }
+    }
 
     private func generateBoardCode() -> String {
         let chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
         return String((0..<6).map { _ in chars.randomElement()! })
     }
 
-    private func zeroToNil(_ value: Double?) -> Double? {
-        guard let v = value, v > 0 else { return nil }
-        return v
-    }
-
     private func cacheMembers(_ members: [BoardMember]) {
         if let data = try? JSONEncoder().encode(members) {
-            UserDefaults.standard.set(data, forKey: "cachedMembers")
+            UserDefaults.standard.set(data, forKey: Keys.cachedMembers)
         }
     }
 
     private func loadCachedMembers() -> [BoardMember] {
-        guard let data = UserDefaults.standard.data(forKey: "cachedMembers"),
+        guard let data = UserDefaults.standard.data(forKey: Keys.cachedMembers),
               let members = try? JSONDecoder().decode([BoardMember].self, from: data) else {
             return []
         }
@@ -249,7 +256,7 @@ final class CloudKitManager {
     }
 
     private func clearCache() {
-        UserDefaults.standard.removeObject(forKey: "cachedMembers")
+        UserDefaults.standard.removeObject(forKey: Keys.cachedMembers)
     }
 }
 
