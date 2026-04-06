@@ -11,6 +11,12 @@ import SwiftUI
 struct runboardApp: App {
     @State private var appState = AppState()
 
+    init() {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        UserDefaults.standard.set("\(version) (\(build))", forKey: "version_preference")
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
