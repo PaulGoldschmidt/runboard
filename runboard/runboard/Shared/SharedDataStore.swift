@@ -11,7 +11,7 @@ enum SharedDataStore {
     static let suiteName = "group.p3g3.runboard"
     static let cloudKitContainerID = "iCloud.p3g3.runboard"
 
-    private static let defaults = UserDefaults(suiteName: suiteName)!
+    static var defaults: UserDefaults = UserDefaults(suiteName: suiteName) ?? .standard
 
     private enum Keys {
         static let boardCode = "boardCode"
