@@ -17,7 +17,7 @@ jobs:
           xcodebuild test \
             -project runboard/runboard.xcodeproj \
             -scheme runboard \
-            -destination 'platform=iOS Simulator,name=iPhone' \
+            -destination 'platform=iOS Simulator,name=iPhone SE (3rd generation)' \
             -only-testing:runboardTests \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
