@@ -509,6 +509,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Runboard;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Runboard reads your VO2 Max and running distance to share with your board.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "We added new comparable types of health data to our app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -548,6 +549,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Runboard;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Runboard reads your VO2 Max and running distance to share with your board.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "We added new comparable types of health data to our app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
