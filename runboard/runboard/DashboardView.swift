@@ -120,7 +120,7 @@ struct DashboardView: View {
 
     private func leaderboardList(_ sorted: [BoardMember]) -> some View {
         ScrollView {
-            if appState.cloudKit.isLoading && appState.cloudKit.members.isEmpty {
+            if !appState.cloudKit.hasFetched && appState.cloudKit.members.isEmpty {
                 VStack(spacing: 12) {
                     ProgressView()
                         .tint(Theme.accent)

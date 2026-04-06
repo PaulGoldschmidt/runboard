@@ -54,6 +54,7 @@ final class CloudKitManager {
     var boardCreatorRecordName: String?
     var boardCreatedDate: Date?
     var isLoading = false
+    var hasFetched = false
     var errorMessage: String?
 
     private let container = CKContainer(identifier: "iCloud.p3g3.runboard")
@@ -131,7 +132,10 @@ final class CloudKitManager {
         guard let code = currentBoardCode else { return }
 
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            hasFetched = true
+        }
 
         do {
             let boardID = CKRecord.ID(recordName: code)
