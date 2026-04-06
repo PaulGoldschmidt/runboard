@@ -9,6 +9,8 @@
 			<string>PSGroupSpecifier</string>
 			<key>Title</key>
 			<string>About</string>
+			<key>FooterText</key>
+			<string>Developed by Paul Goldschmidt in California.</string>
 		</dict>
 		<dict>
 			<key>Type</key>
@@ -19,6 +21,16 @@
 			<string>version_preference</string>
 			<key>DefaultValue</key>
 			<string></string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTitleValueSpecifier</string>
+			<key>Title</key>
+			<string>Website</string>
+			<key>Key</key>
+			<string>website_preference</string>
+			<key>DefaultValue</key>
+			<string>paul-goldschmidt.de</string>
 		</dict>
 		<dict>
 			<key>Type</key>
