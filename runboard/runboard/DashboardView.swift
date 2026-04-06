@@ -336,6 +336,8 @@ struct DashboardView: View {
                                 }
                             }
                             .listRowBackground(Theme.cardBackground)
+                            .listRowSeparator(member.id == appState.cloudKit.members.last?.id ? .hidden : .visible)
+                            .listRowSeparatorTint(Theme.cardBorder)
                             .swipeActions(edge: .trailing) {
                                 if appState.cloudKit.isCreator && !member.isCurrentUser {
                                     Button(role: .destructive) {
@@ -349,6 +351,7 @@ struct DashboardView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                    .environment(\.defaultMinListRowHeight, 48)
                     .frame(minHeight: CGFloat(appState.cloudKit.members.count) * 48)
                 }
 
