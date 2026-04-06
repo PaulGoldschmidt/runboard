@@ -6,29 +6,29 @@
 //
 
 import SwiftUI
-import Charts
+
+enum StatType: String, CaseIterable {
+    case weeklyKm = "WEEKLY KM"
+    case vo2Max = "VO2 MAX"
+}
 
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var selectedStat: StatType = .weeklyKm
     @State private var showBoardSettings = false
 
-    enum StatType: String, CaseIterable {
-        case weeklyKm = "WEEKLY KM"
-        case vo2Max = "VO2 MAX"
-    }
-
     var body: some View {
+        let sorted = sortedMembers
         ZStack {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 headerView
                 statToggle
-                if sortedMembers.count >= 2 && sortedMembers.contains(where: { $0.statsHistory.count >= 2 }) {
-                    StatsGraphView(members: sortedMembers, statType: selectedStat)
+                if sorted.count >= 2 && sorted.contains(where: { $0.statsHistory.count >= 2 }) {
+                    StatsGraphView(members: sorted, statType: selectedStat)
                 }
-                leaderboardList
+                leaderboardList(sorted)
             }
         }
         .preferredColorScheme(.dark)
@@ -118,7 +118,7 @@ struct DashboardView: View {
         }
     }
 
-    private var leaderboardList: some View {
+    private func leaderboardList(_ sorted: [BoardMember]) -> some View {
         ScrollView {
             if appState.cloudKit.isLoading && appState.cloudKit.members.isEmpty {
                 VStack(spacing: 12) {
@@ -131,7 +131,7 @@ struct DashboardView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 60)
-            } else if sortedMembers.isEmpty {
+            } else if sorted.isEmpty {
                 VStack(spacing: 12) {
                     Text("NO MEMBERS YET")
                         .font(Theme.body)
@@ -146,7 +146,7 @@ struct DashboardView: View {
                 .padding(.top, 60)
             } else {
                 LazyVStack(spacing: 10) {
-                    ForEach(Array(sortedMembers.enumerated()), id: \.element.id) { index, member in
+                    ForEach(Array(sorted.enumerated()), id: \.element.id) { index, member in
                         memberCard(rank: index + 1, member: member)
                     }
                 }
@@ -163,7 +163,7 @@ struct DashboardView: View {
             // Rank
             Text("\(rank)")
                 .font(Theme.headline)
-                .foregroundStyle(rankColor(rank))
+                .foregroundStyle(Theme.chartColor(forRank: rank))
                 .frame(width: 32)
 
             // Name
@@ -224,14 +224,6 @@ struct DashboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    private func rankColor(_ rank: Int) -> Color {
-        switch rank {
-        case 1: return Theme.accent
-        case 2: return Theme.secondaryAccent
-        case 3: return Color.orange
-        default: return Theme.dimText
-        }
-    }
 
     // MARK: - Board Settings Sheet
 

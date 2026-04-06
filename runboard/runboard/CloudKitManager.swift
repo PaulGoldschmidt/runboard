@@ -257,8 +257,7 @@ final class CloudKitManager {
     }
 
     nonisolated static func currentWeekStart() -> Date {
-        var calendar = Calendar(identifier: .iso8601)
-        calendar.firstWeekday = 2 // Monday
+        let calendar = Calendar(identifier: .iso8601)
         let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
         return calendar.date(from: components) ?? Date()
     }
