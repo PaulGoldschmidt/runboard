@@ -92,6 +92,13 @@ struct SmallWidgetView: View {
                 .tracking(0.5)
                 .lineLimit(1)
 
+            if rank == 1 {
+                Image("Trophy")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 12)
+            }
+
             Spacer(minLength: 0)
 
             Text(entry.statType.formattedValue(for: member, compact: true))
@@ -153,6 +160,13 @@ struct MediumWidgetView: View {
                 .foregroundStyle(member.isCurrentUser ? Theme.accent : .white)
                 .tracking(0.5)
                 .lineLimit(1)
+
+            if rank == 1 {
+                Image("Trophy")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 14)
+            }
 
             if member.isCurrentUser {
                 Text("YOU")
@@ -235,11 +249,20 @@ struct LargeWidgetView: View {
                 .frame(width: 24, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(member.displayName.uppercased())
-                    .font(Theme.font(13))
-                    .foregroundStyle(.white)
-                    .tracking(0.5)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(member.displayName.uppercased())
+                        .font(Theme.font(13))
+                        .foregroundStyle(.white)
+                        .tracking(0.5)
+                        .lineLimit(1)
+
+                    if rank == 1 {
+                        Image("Trophy")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 14)
+                    }
+                }
 
                 if member.isCurrentUser {
                     Text("YOU")
