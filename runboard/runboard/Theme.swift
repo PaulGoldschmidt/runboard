@@ -24,4 +24,17 @@ enum Theme {
     static let cardBackground = Color.white.opacity(0.06)
     static let cardBorder = Color.white.opacity(0.1)
     static let dimText = Color.white.opacity(0.5)
+
+    static let chartColors: [Color] = [
+        accent,
+        secondaryAccent,
+        .orange,
+        Color(red: 1.0, green: 0.4, blue: 0.7),   // pink
+        Color(red: 0.8, green: 0.6, blue: 1.0),     // lavender
+        Color(red: 1.0, green: 0.85, blue: 0.3),    // yellow
+    ]
+
+    static func chartColor(forRank rank: Int) -> Color {
+        chartColors[(rank - 1) % chartColors.count]
+    }
 }

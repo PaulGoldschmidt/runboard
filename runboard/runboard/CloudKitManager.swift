@@ -9,6 +9,13 @@ import Foundation
 import CloudKit
 import Observation
 
+struct WeeklySnapshot: Codable, Equatable, Identifiable {
+    let weekStart: Date
+    var weeklyKilometers: Double
+    var vo2Max: Double?
+    var id: Date { weekStart }
+}
+
 struct BoardMember: Identifiable, Codable, Equatable {
     let id: String
     var displayName: String
@@ -16,6 +23,7 @@ struct BoardMember: Identifiable, Codable, Equatable {
     var weeklyKilometers: Double
     var lastUpdated: Date
     var isCurrentUser: Bool = false
+    var statsHistory: [WeeklySnapshot] = []
 }
 
 private enum Keys {
@@ -33,6 +41,7 @@ private enum RecordField {
     static let creatorName = "creatorName"
     static let creatorRecordName = "creatorRecordName"
     static let memberRecordNames = "memberRecordNames"
+    static let statsHistory = "statsHistory"
 }
 
 @Observable
@@ -158,6 +167,20 @@ final class CloudKitManager {
             record[RecordField.vo2Max] = vo2Max.map { $0 as CKRecordValue }
             record[RecordField.weeklyKilometers] = weeklyKilometers
             record[RecordField.lastUpdated] = Date()
+
+            // Update stats history
+            var history = decodeHistory(from: record)
+            let weekStart = Self.currentWeekStart()
+            if let index = history.firstIndex(where: { $0.weekStart == weekStart }) {
+                history[index].weeklyKilometers = weeklyKilometers
+                history[index].vo2Max = vo2Max
+            } else {
+                history.append(WeeklySnapshot(weekStart: weekStart, weeklyKilometers: weeklyKilometers, vo2Max: vo2Max))
+            }
+            if let data = try? JSONEncoder().encode(history), let json = String(data: data, encoding: .utf8) {
+                record[RecordField.statsHistory] = json
+            }
+
             try await database.save(record)
         } catch {
             errorMessage = "Could not sync your stats."
@@ -219,8 +242,25 @@ final class CloudKitManager {
             vo2Max: record["vo2Max"] as? Double,
             weeklyKilometers: record["weeklyKilometers"] as? Double ?? 0.0,
             lastUpdated: record["lastUpdated"] as? Date ?? Date(),
-            isCurrentUser: id.recordName == currentRecordName
+            isCurrentUser: id.recordName == currentRecordName,
+            statsHistory: decodeHistory(from: record)
         )
+    }
+
+    nonisolated private func decodeHistory(from record: CKRecord) -> [WeeklySnapshot] {
+        guard let json = record["statsHistory"] as? String,
+              let data = json.data(using: .utf8),
+              let history = try? JSONDecoder().decode([WeeklySnapshot].self, from: data) else {
+            return []
+        }
+        return history.sorted { $0.weekStart < $1.weekStart }
+    }
+
+    nonisolated static func currentWeekStart() -> Date {
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.firstWeekday = 2 // Monday
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        return calendar.date(from: components) ?? Date()
     }
 
     private func fetchMemberRecords(ids: [CKRecord.ID]) async -> [BoardMember] {

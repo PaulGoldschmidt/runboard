@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Charts
 
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
@@ -24,6 +25,9 @@ struct DashboardView: View {
             VStack(spacing: 0) {
                 headerView
                 statToggle
+                if sortedMembers.count >= 2 && sortedMembers.contains(where: { $0.statsHistory.count >= 2 }) {
+                    StatsGraphView(members: sortedMembers, statType: selectedStat)
+                }
                 leaderboardList
             }
         }
