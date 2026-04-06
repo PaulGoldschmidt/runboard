@@ -212,21 +212,25 @@ final class CloudKitManager {
         _ = try? await database.deleteRecord(withID: memberID)
     }
 
+    nonisolated private func parseMember(from record: CKRecord, id: CKRecord.ID, currentRecordName: String?) -> BoardMember {
+        BoardMember(
+            id: id.recordName,
+            displayName: record["displayName"] as? String ?? "Unknown",
+            vo2Max: record["vo2Max"] as? Double,
+            weeklyKilometers: record["weeklyKilometers"] as? Double ?? 0.0,
+            lastUpdated: record["lastUpdated"] as? Date ?? Date(),
+            isCurrentUser: id.recordName == currentRecordName
+        )
+    }
+
     private func fetchMemberRecords(ids: [CKRecord.ID]) async -> [BoardMember] {
         let db = database
         let currentRecordName = myRecordName
         return await withTaskGroup(of: BoardMember?.self) { group in
             for memberID in ids {
-                group.addTask {
+                group.addTask { [self] in
                     guard let record = try? await db.record(for: memberID) else { return nil }
-                    return BoardMember(
-                        id: memberID.recordName,
-                        displayName: record[RecordField.displayName] as? String ?? "Unknown",
-                        vo2Max: record[RecordField.vo2Max] as? Double,
-                        weeklyKilometers: record[RecordField.weeklyKilometers] as? Double ?? 0.0,
-                        lastUpdated: record[RecordField.lastUpdated] as? Date ?? Date(),
-                        isCurrentUser: memberID.recordName == currentRecordName
-                    )
+                    return self.parseMember(from: record, id: memberID, currentRecordName: currentRecordName)
                 }
             }
 
