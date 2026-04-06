@@ -52,30 +52,21 @@ struct RunboardWidgetEntryView: View {
 struct SmallWidgetView: View {
     let entry: RunboardEntry
 
-    private var statLabel: String {
-        switch entry.statType {
-        case .weeklyKm: return "KM"
-        case .vo2Max: return "VO2"
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
             HStack(alignment: .firstTextBaseline) {
                 Text("RUNBOARD")
                     .font(Theme.font(13))
                     .foregroundStyle(Theme.accent)
                     .tracking(2)
                 Spacer()
-                Text(statLabel)
+                Text(entry.statType.shortLabel)
                     .font(Theme.font(9))
                     .foregroundStyle(Theme.dimText)
                     .tracking(1)
             }
             .padding(.bottom, 8)
 
-            // Top 3 members
             let members = Array(entry.members.prefix(3))
             VStack(spacing: 6) {
                 ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
@@ -103,21 +94,9 @@ struct SmallWidgetView: View {
 
             Spacer(minLength: 0)
 
-            Text(statValue(for: member))
+            Text(entry.statType.formattedValue(for: member, compact: true))
                 .font(Theme.font(12))
                 .foregroundStyle(.white)
-        }
-    }
-
-    private func statValue(for member: BoardMember) -> String {
-        switch entry.statType {
-        case .weeklyKm:
-            return String(format: "%.1f", member.weeklyKilometers)
-        case .vo2Max:
-            if let vo2 = member.vo2Max {
-                return String(format: "%.0f", vo2)
-            }
-            return "---"
         }
     }
 }
@@ -127,23 +106,8 @@ struct SmallWidgetView: View {
 struct MediumWidgetView: View {
     let entry: RunboardEntry
 
-    private var statLabel: String {
-        switch entry.statType {
-        case .weeklyKm: return "WEEKLY KM"
-        case .vo2Max: return "VO2 MAX"
-        }
-    }
-
-    private var unitLabel: String {
-        switch entry.statType {
-        case .weeklyKm: return "KM"
-        case .vo2Max: return "ML/KG/MIN"
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
             HStack(alignment: .firstTextBaseline) {
                 Text("RUNBOARD")
                     .font(Theme.font(16))
@@ -159,13 +123,12 @@ struct MediumWidgetView: View {
             }
             .padding(.bottom, 4)
 
-            Text(statLabel)
+            Text(entry.statType.fullLabel)
                 .font(Theme.font(9))
                 .foregroundStyle(Theme.dimText)
                 .tracking(1)
                 .padding(.bottom, 8)
 
-            // Top 5 members
             let members = Array(entry.members.prefix(5))
             VStack(spacing: 5) {
                 ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
@@ -200,11 +163,11 @@ struct MediumWidgetView: View {
 
             Spacer(minLength: 0)
 
-            Text(statValue(for: member))
+            Text(entry.statType.formattedValue(for: member))
                 .font(Theme.font(13))
                 .foregroundStyle(.white)
 
-            Text(unitLabel)
+            Text(entry.statType.unitLabel)
                 .font(Theme.font(8))
                 .foregroundStyle(Theme.dimText)
                 .tracking(0.5)
@@ -222,18 +185,6 @@ struct MediumWidgetView: View {
                 : nil
         )
     }
-
-    private func statValue(for member: BoardMember) -> String {
-        switch entry.statType {
-        case .weeklyKm:
-            return String(format: "%.1f", member.weeklyKilometers)
-        case .vo2Max:
-            if let vo2 = member.vo2Max {
-                return String(format: "%.1f", vo2)
-            }
-            return "---"
-        }
-    }
 }
 
 // MARK: - Large Widget
@@ -241,23 +192,8 @@ struct MediumWidgetView: View {
 struct LargeWidgetView: View {
     let entry: RunboardEntry
 
-    private var statLabel: String {
-        switch entry.statType {
-        case .weeklyKm: return "WEEKLY KM"
-        case .vo2Max: return "VO2 MAX"
-        }
-    }
-
-    private var unitLabel: String {
-        switch entry.statType {
-        case .weeklyKm: return "KM"
-        case .vo2Max: return "ML/KG/MIN"
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("RUNBOARD")
@@ -272,14 +208,13 @@ struct LargeWidgetView: View {
                     }
                 }
                 Spacer()
-                Text(statLabel)
+                Text(entry.statType.fullLabel)
                     .font(Theme.font(10))
                     .foregroundStyle(Theme.secondaryAccent)
                     .tracking(1)
             }
             .padding(.bottom, 12)
 
-            // Members
             let members = Array(entry.members.prefix(8))
             VStack(spacing: 6) {
                 ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
@@ -294,13 +229,11 @@ struct LargeWidgetView: View {
 
     private func largeMemberCard(rank: Int, member: BoardMember) -> some View {
         HStack(spacing: 10) {
-            // Rank
             Text("\(rank)")
                 .font(Theme.font(16))
                 .foregroundStyle(Theme.chartColor(forRank: rank))
                 .frame(width: 24, alignment: .leading)
 
-            // Name
             VStack(alignment: .leading, spacing: 1) {
                 Text(member.displayName.uppercased())
                     .font(Theme.font(13))
@@ -318,12 +251,11 @@ struct LargeWidgetView: View {
 
             Spacer(minLength: 0)
 
-            // Stat
             VStack(alignment: .trailing, spacing: 1) {
-                Text(statValue(for: member))
+                Text(entry.statType.formattedValue(for: member))
                     .font(Theme.font(15))
                     .foregroundStyle(.white)
-                Text(unitLabel)
+                Text(entry.statType.unitLabel)
                     .font(Theme.font(8))
                     .foregroundStyle(Theme.dimText)
                     .tracking(1)
@@ -340,18 +272,6 @@ struct LargeWidgetView: View {
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private func statValue(for member: BoardMember) -> String {
-        switch entry.statType {
-        case .weeklyKm:
-            return String(format: "%.1f", member.weeklyKilometers)
-        case .vo2Max:
-            if let vo2 = member.vo2Max {
-                return String(format: "%.1f", vo2)
-            }
-            return "---"
-        }
     }
 }
 

@@ -9,10 +9,9 @@ import Foundation
 
 enum SharedDataStore {
     static let suiteName = "group.p3g3.runboard"
+    static let cloudKitContainerID = "iCloud.p3g3.runboard"
 
-    private static var defaults: UserDefaults {
-        UserDefaults(suiteName: suiteName)!
-    }
+    private static let defaults = UserDefaults(suiteName: suiteName)!
 
     private enum Keys {
         static let boardCode = "boardCode"

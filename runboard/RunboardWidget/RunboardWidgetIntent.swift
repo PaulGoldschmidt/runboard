@@ -22,6 +22,39 @@ enum WidgetStatType: String, AppEnum {
             .vo2Max: "VO2 Max"
         ]
     }
+
+    var fullLabel: String {
+        switch self {
+        case .weeklyKm: return "WEEKLY KM"
+        case .vo2Max: return "VO2 MAX"
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .weeklyKm: return "KM"
+        case .vo2Max: return "VO2"
+        }
+    }
+
+    var unitLabel: String {
+        switch self {
+        case .weeklyKm: return "KM"
+        case .vo2Max: return "ML/KG/MIN"
+        }
+    }
+
+    func formattedValue(for member: BoardMember, compact: Bool = false) -> String {
+        switch self {
+        case .weeklyKm:
+            return String(format: "%.1f", member.weeklyKilometers)
+        case .vo2Max:
+            if let vo2 = member.vo2Max {
+                return String(format: compact ? "%.0f" : "%.1f", vo2)
+            }
+            return "---"
+        }
+    }
 }
 
 struct RunboardWidgetIntent: WidgetConfigurationIntent {

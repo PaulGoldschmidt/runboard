@@ -34,7 +34,7 @@ final class CloudKitManager {
     var hasFetched = false
     var errorMessage: String?
 
-    private let container = CKContainer(identifier: "iCloud.p3g3.runboard")
+    private let container = CKContainer(identifier: SharedDataStore.cloudKitContainerID)
     private var database: CKDatabase { container.publicCloudDatabase }
 
     var hasBoard: Bool { currentBoardCode != nil }

@@ -18,7 +18,7 @@ struct RunboardEntry: TimelineEntry {
 }
 
 struct RunboardTimelineProvider: AppIntentTimelineProvider {
-    private let container = CKContainer(identifier: "iCloud.p3g3.runboard")
+    private let container = CKContainer(identifier: SharedDataStore.cloudKitContainerID)
 
     func placeholder(in context: Context) -> RunboardEntry {
         RunboardEntry(
@@ -45,13 +45,7 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
 
     func timeline(for configuration: RunboardWidgetIntent, in context: Context) async -> Timeline<RunboardEntry> {
         let fetched = await fetchMembers()
-        let sorted: [BoardMember]
-        switch configuration.statType {
-        case .weeklyKm:
-            sorted = fetched.sorted { $0.weeklyKilometers > $1.weeklyKilometers }
-        case .vo2Max:
-            sorted = fetched.sorted { ($0.vo2Max ?? -1) > ($1.vo2Max ?? -1) }
-        }
+        let sorted = Self.sorted(fetched, by: configuration.statType)
 
         let entry = RunboardEntry(
             date: .now,
@@ -111,7 +105,10 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
     }
 
     private func sortedMembers(for statType: WidgetStatType) -> [BoardMember] {
-        let members = SharedDataStore.loadCachedMembers()
+        Self.sorted(SharedDataStore.loadCachedMembers(), by: statType)
+    }
+
+    private static func sorted(_ members: [BoardMember], by statType: WidgetStatType) -> [BoardMember] {
         switch statType {
         case .weeklyKm:
             return members.sorted { $0.weeklyKilometers > $1.weeklyKilometers }
