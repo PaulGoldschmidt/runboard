@@ -156,24 +156,26 @@ struct DashboardView: View {
     private func memberCard(rank: Int, member: BoardMember) -> some View {
         HStack(spacing: 14) {
             // Rank
-            if rank == 1 {
-                Image("Trophy")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
-            } else {
-                Text("\(rank)")
-                    .font(Theme.headline)
-                    .foregroundStyle(Theme.chartColor(forRank: rank))
-                    .frame(width: 32)
-            }
+            Text("\(rank)")
+                .font(Theme.headline)
+                .foregroundStyle(Theme.chartColor(forRank: rank))
+                .frame(width: 32)
 
             // Name
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.displayName.uppercased())
-                    .font(Theme.body)
-                    .foregroundStyle(.white)
-                    .tracking(1)
+                HStack(spacing: 8) {
+                    Text(member.displayName.uppercased())
+                        .font(Theme.body)
+                        .foregroundStyle(.white)
+                        .tracking(1)
+
+                    if rank == 1 {
+                        Image("Trophy")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 20)
+                    }
+                }
 
                 if member.isCurrentUser {
                     Text("YOU")
