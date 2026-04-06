@@ -213,17 +213,19 @@ final class CloudKitManager {
     }
 
     private func fetchMemberRecords(ids: [CKRecord.ID]) async -> [BoardMember] {
-        await withTaskGroup(of: BoardMember?.self) { group in
+        let db = database
+        let currentRecordName = myRecordName
+        return await withTaskGroup(of: BoardMember?.self) { group in
             for memberID in ids {
                 group.addTask {
-                    guard let record = try? await self.database.record(for: memberID) else { return nil }
+                    guard let record = try? await db.record(for: memberID) else { return nil }
                     return BoardMember(
                         id: memberID.recordName,
                         displayName: record[RecordField.displayName] as? String ?? "Unknown",
                         vo2Max: record[RecordField.vo2Max] as? Double,
                         weeklyKilometers: record[RecordField.weeklyKilometers] as? Double ?? 0.0,
                         lastUpdated: record[RecordField.lastUpdated] as? Date ?? Date(),
-                        isCurrentUser: memberID.recordName == self.myRecordName
+                        isCurrentUser: memberID.recordName == currentRecordName
                     )
                 }
             }
