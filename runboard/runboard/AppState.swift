@@ -7,6 +7,7 @@
 
 import Foundation
 import Observation
+import WidgetKit
 
 @Observable
 final class AppState {
@@ -24,5 +25,6 @@ final class AppState {
             weeklyKilometers: healthKit.weeklyRunningKilometers
         )
         await cloudKit.fetchBoardMembers()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }

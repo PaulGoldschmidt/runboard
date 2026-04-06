@@ -8,30 +8,7 @@
 import Foundation
 import CloudKit
 import Observation
-
-struct WeeklySnapshot: Codable, Equatable, Identifiable {
-    let weekStart: Date
-    var weeklyKilometers: Double
-    var vo2Max: Double?
-    var id: Date { weekStart }
-}
-
-struct BoardMember: Identifiable, Codable, Equatable {
-    let id: String
-    var displayName: String
-    var vo2Max: Double?
-    var weeklyKilometers: Double
-    var lastUpdated: Date
-    var isCurrentUser: Bool = false
-    var statsHistory: [WeeklySnapshot] = []
-}
-
-private enum Keys {
-    static let boardCode = "boardCode"
-    static let myRecordName = "myRecordName"
-    static let displayName = "displayName"
-    static let cachedMembers = "cachedMembers"
-}
+import WidgetKit
 
 private enum RecordField {
     static let displayName = "displayName"
@@ -64,15 +41,15 @@ final class CloudKitManager {
     var isCreator: Bool { myRecordName != nil && myRecordName == boardCreatorRecordName }
 
     init() {
-        currentBoardCode = UserDefaults.standard.string(forKey: Keys.boardCode)
-        myRecordName = UserDefaults.standard.string(forKey: Keys.myRecordName)
-        myDisplayName = UserDefaults.standard.string(forKey: Keys.displayName)
+        currentBoardCode = SharedDataStore.boardCode
+        myRecordName = SharedDataStore.myRecordName
+        myDisplayName = SharedDataStore.displayName
     }
 
     private func persist() {
-        UserDefaults.standard.set(currentBoardCode, forKey: Keys.boardCode)
-        UserDefaults.standard.set(myRecordName, forKey: Keys.myRecordName)
-        UserDefaults.standard.set(myDisplayName, forKey: Keys.displayName)
+        SharedDataStore.boardCode = currentBoardCode
+        SharedDataStore.myRecordName = myRecordName
+        SharedDataStore.displayName = myDisplayName
     }
 
     // MARK: - Board Operations
@@ -152,12 +129,13 @@ final class CloudKitManager {
 
             if members != fetched {
                 members = fetched
-                cacheMembers(fetched)
+                SharedDataStore.cacheMembers(fetched)
+                WidgetCenter.shared.reloadAllTimelines()
             }
             errorMessage = nil
         } catch {
             errorMessage = "Could not load board."
-            members = loadCachedMembers()
+            members = SharedDataStore.loadCachedMembers()
         }
     }
 
@@ -204,7 +182,8 @@ final class CloudKitManager {
         boardCreatedDate = nil
         persist()
         members = []
-        clearCache()
+        SharedDataStore.clearCache()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func removeMember(_ member: BoardMember) async {
@@ -213,7 +192,8 @@ final class CloudKitManager {
         await removeMemberFromBoard(memberRecordName: member.id, boardCode: code)
 
         members.removeAll { $0.id == member.id }
-        cacheMembers(members)
+        SharedDataStore.cacheMembers(members)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - Private Helpers
@@ -290,23 +270,6 @@ final class CloudKitManager {
         return String((0..<6).map { _ in chars.randomElement()! })
     }
 
-    private func cacheMembers(_ members: [BoardMember]) {
-        if let data = try? JSONEncoder().encode(members) {
-            UserDefaults.standard.set(data, forKey: Keys.cachedMembers)
-        }
-    }
-
-    private func loadCachedMembers() -> [BoardMember] {
-        guard let data = UserDefaults.standard.data(forKey: Keys.cachedMembers),
-              let members = try? JSONDecoder().decode([BoardMember].self, from: data) else {
-            return []
-        }
-        return members
-    }
-
-    private func clearCache() {
-        UserDefaults.standard.removeObject(forKey: Keys.cachedMembers)
-    }
 }
 
 enum BoardError: LocalizedError {

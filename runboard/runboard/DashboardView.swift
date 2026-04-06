@@ -7,11 +7,6 @@
 
 import SwiftUI
 
-enum StatType: String, CaseIterable {
-    case weeklyKm = "WEEKLY KM"
-    case vo2Max = "VO2 MAX"
-}
-
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var selectedStat: StatType = .weeklyKm
