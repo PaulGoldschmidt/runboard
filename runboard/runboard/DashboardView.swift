@@ -7,11 +7,6 @@
 
 import SwiftUI
 
-enum StatType: String, CaseIterable {
-    case weeklyKm = "WEEKLY KM"
-    case vo2Max = "VO2 MAX"
-}
-
 struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var selectedStat: StatType = .weeklyKm
@@ -168,10 +163,19 @@ struct DashboardView: View {
 
             // Name
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.displayName.uppercased())
-                    .font(Theme.body)
-                    .foregroundStyle(.white)
-                    .tracking(1)
+                HStack(spacing: 8) {
+                    Text(member.displayName.uppercased())
+                        .font(Theme.body)
+                        .foregroundStyle(.white)
+                        .tracking(1)
+
+                    if rank == 1 {
+                        Image("Trophy")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 20)
+                    }
+                }
 
                 if member.isCurrentUser {
                     Text("YOU")
