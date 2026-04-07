@@ -19,6 +19,7 @@ struct ContentView: View {
             }
         }
         .task {
+            guard !appState.seeded else { return }
             await appState.healthKit.requestAuthorization()
         }
     }
