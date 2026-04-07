@@ -22,6 +22,7 @@ struct BoardMember: Identifiable, Codable, Equatable {
     var lastUpdated: Date
     var isCurrentUser: Bool = false
     var statsHistory: [WeeklySnapshot] = []
+    var joinedDate: Date?
 }
 
 enum StatType: String, CaseIterable {

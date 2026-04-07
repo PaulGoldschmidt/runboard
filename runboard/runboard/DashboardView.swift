@@ -323,10 +323,18 @@ struct DashboardView: View {
                     List {
                         ForEach(appState.cloudKit.members) { member in
                             HStack {
-                                Text(member.displayName.uppercased())
-                                    .font(Theme.body)
-                                    .foregroundStyle(.white)
-                                    .tracking(1)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(member.displayName.uppercased())
+                                        .font(Theme.body)
+                                        .foregroundStyle(.white)
+                                        .tracking(1)
+                                    if let joined = member.joinedDate {
+                                        Text("JOINED \(joined.formatted(date: .abbreviated, time: .omitted).uppercased())")
+                                            .font(Theme.font(12))
+                                            .foregroundStyle(Theme.dimText)
+                                            .tracking(1)
+                                    }
+                                }
                                 Spacer()
                                 if member.isCurrentUser {
                                     Text("YOU")
@@ -336,7 +344,8 @@ struct DashboardView: View {
                                 }
                             }
                             .listRowBackground(Theme.cardBackground)
-                            .listRowSeparator(member.id == appState.cloudKit.members.last?.id ? .hidden : .visible)
+                            .listRowSeparator(.hidden, edges: .top)
+                            .listRowSeparator(member.id == appState.cloudKit.members.last?.id ? .hidden : .visible, edges: .bottom)
                             .listRowSeparatorTint(Theme.cardBorder)
                             .swipeActions(edge: .trailing) {
                                 if appState.cloudKit.isCreator && !member.isCurrentUser {
