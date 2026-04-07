@@ -227,7 +227,8 @@ final class CloudKitManager {
             weeklyKilometers: record["weeklyKilometers"] as? Double ?? 0.0,
             lastUpdated: record["lastUpdated"] as? Date ?? Date(),
             isCurrentUser: id.recordName == currentRecordName,
-            statsHistory: decodeHistory(from: record)
+            statsHistory: decodeHistory(from: record),
+            joinedDate: record.creationDate
         )
     }
 
