@@ -35,25 +35,15 @@ struct StatsGraphView: View {
     // MARK: - Chart
 
     private var chart: some View {
-        Chart {
-            ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-                let color = Theme.chartColor(forRank: index + 1)
-                ForEach(dataPoints(for: member)) { point in
-                    LineMark(
-                        x: .value("Week", point.weekStart),
-                        y: .value(yLabel, point.value)
-                    )
-                    .foregroundStyle(color)
-                    .interpolationMethod(.catmullRom)
-
-                    PointMark(
-                        x: .value("Week", point.weekStart),
-                        y: .value(yLabel, point.value)
-                    )
-                    .foregroundStyle(color)
-                    .symbolSize(30)
-                }
-            }
+        Chart(chartData, id: \.id) { point in
+            LineMark(
+                x: .value("Week", point.weekStart),
+                y: .value(yLabel, point.value),
+                series: .value("Member", point.memberName)
+            )
+            .foregroundStyle(point.color)
+            .interpolationMethod(.catmullRom)
+            .lineStyle(StrokeStyle(lineWidth: 2))
         }
         .chartXAxis {
             AxisMarks(values: .automatic) { _ in
@@ -97,20 +87,31 @@ struct StatsGraphView: View {
 
     // MARK: - Data
 
-    private struct DataPoint: Identifiable {
+    private struct ChartPoint: Identifiable {
+        let id: String
         let weekStart: Date
         let value: Double
-        var id: Date { weekStart }
+        let memberName: String
+        let color: Color
     }
 
-    private func dataPoints(for member: BoardMember) -> [DataPoint] {
-        member.statsHistory.compactMap { snapshot in
-            switch statType {
-            case .weeklyKm:
-                return DataPoint(weekStart: snapshot.weekStart, value: snapshot.weeklyKilometers)
-            case .vo2Max:
-                guard let vo2 = snapshot.vo2Max else { return nil }
-                return DataPoint(weekStart: snapshot.weekStart, value: vo2)
+    private var chartData: [ChartPoint] {
+        members.enumerated().flatMap { index, member in
+            let color = Theme.chartColor(forRank: index + 1)
+            return member.statsHistory.compactMap { snapshot -> ChartPoint? in
+                let value: Double?
+                switch statType {
+                case .weeklyKm: value = snapshot.weeklyKilometers
+                case .vo2Max: value = snapshot.vo2Max
+                }
+                guard let v = value else { return nil }
+                return ChartPoint(
+                    id: "\(member.id)_\(snapshot.weekStart.timeIntervalSince1970)",
+                    weekStart: snapshot.weekStart,
+                    value: v,
+                    memberName: member.displayName,
+                    color: color
+                )
             }
         }
     }
