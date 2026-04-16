@@ -67,7 +67,7 @@ struct SmallWidgetView: View {
             }
             .padding(.bottom, 8)
 
-            let members = Array(entry.members.prefix(3))
+            let members = Array(entry.members.prefix(5))
             VStack(spacing: 6) {
                 ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
                     smallMemberRow(rank: index + 1, member: member)
