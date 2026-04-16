@@ -125,7 +125,7 @@ final class CloudKitManager {
             let memberNames = (boardRecord[RecordField.memberRecordNames] as? [String]) ?? []
             let memberIDs = memberNames.map { CKRecord.ID(recordName: $0) }
 
-            let fetched = await fetchMemberRecords(ids: memberIDs)
+            let fetched = await fetchMemberRecords(ids: memberIDs).deduplicatedByNameAndStats()
 
             if members != fetched {
                 members = fetched

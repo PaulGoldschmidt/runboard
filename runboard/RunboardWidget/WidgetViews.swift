@@ -8,6 +8,25 @@
 import SwiftUI
 import WidgetKit
 
+// MARK: - Leaderboard Slice
+
+private struct LeaderboardRow: Identifiable {
+    let rank: Int
+    let member: BoardMember
+    var id: String { member.id }
+}
+
+/// Returns up to `limit` rows with real positional ranks. If the current user is outside the
+/// top `limit`, the last slot is replaced with the user's own row so they always see themselves.
+private func leaderboardRows(from members: [BoardMember], limit: Int) -> [LeaderboardRow] {
+    let ranked = members.enumerated().map { LeaderboardRow(rank: $0.offset + 1, member: $0.element) }
+    guard ranked.count > limit else { return ranked }
+    let top = Array(ranked.prefix(limit))
+    if top.contains(where: { $0.member.isCurrentUser }) { return top }
+    guard let me = ranked.first(where: { $0.member.isCurrentUser }) else { return top }
+    return Array(ranked.prefix(limit - 1)) + [me]
+}
+
 // MARK: - Entry View Router
 
 struct RunboardWidgetEntryView: View {
@@ -67,10 +86,10 @@ struct SmallWidgetView: View {
             }
             .padding(.bottom, 8)
 
-            let members = Array(entry.members.prefix(3))
+            let rows = leaderboardRows(from: entry.members, limit: 5)
             VStack(spacing: 6) {
-                ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-                    smallMemberRow(rank: index + 1, member: member)
+                ForEach(rows) { row in
+                    smallMemberRow(rank: row.rank, member: row.member)
                 }
             }
 
@@ -115,31 +134,30 @@ struct MediumWidgetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("RUNBOARD")
                     .font(Theme.font(16))
                     .foregroundStyle(Theme.accent)
                     .tracking(2)
-                Spacer()
                 if let code = entry.boardCode {
                     Text(code)
                         .font(Theme.font(10))
                         .foregroundStyle(Theme.dimText)
                         .tracking(1)
                 }
+                Spacer()
+                Text(entry.statType.fullLabel)
+                    .font(Theme.font(9))
+                    .foregroundStyle(Theme.dimText)
+                    .tracking(1)
             }
-            .padding(.bottom, 4)
+            .padding(.horizontal, 6)
+            .padding(.bottom, 8)
 
-            Text(entry.statType.fullLabel)
-                .font(Theme.font(9))
-                .foregroundStyle(Theme.dimText)
-                .tracking(1)
-                .padding(.bottom, 8)
-
-            let members = Array(entry.members.prefix(5))
+            let rows = leaderboardRows(from: entry.members, limit: 5)
             VStack(spacing: 5) {
-                ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-                    mediumMemberRow(rank: index + 1, member: member)
+                ForEach(rows) { row in
+                    mediumMemberRow(rank: row.rank, member: row.member)
                 }
             }
 
@@ -229,10 +247,10 @@ struct LargeWidgetView: View {
             }
             .padding(.bottom, 12)
 
-            let members = Array(entry.members.prefix(8))
+            let rows = leaderboardRows(from: entry.members, limit: 8)
             VStack(spacing: 6) {
-                ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-                    largeMemberCard(rank: index + 1, member: member)
+                ForEach(rows) { row in
+                    largeMemberCard(rank: row.rank, member: row.member)
                 }
             }
 
