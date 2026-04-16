@@ -30,6 +30,15 @@ enum StatType: String, CaseIterable {
     case vo2Max = "VO2 MAX"
 }
 
+private func roundedToTenth(_ value: Double) -> Double {
+    (value * 10).rounded() / 10
+}
+
+private struct DedupBucketKey: Hashable {
+    let name: String
+    let weeklyKm: Double
+}
+
 extension Array where Element == BoardMember {
     /// Merges entries that share the same normalized name and weeklyKm (rounded to 1 decimal).
     /// VO2 Max is treated as a wildcard when nil — `nil` merges with any non-nil value.
@@ -38,26 +47,21 @@ extension Array where Element == BoardMember {
     func deduplicatedByNameAndStats() -> [BoardMember] {
         guard count > 1 else { return self }
 
-        var groupOrder: [String] = []
-        var groups: [String: [BoardMember]] = [:]
-
-        for member in self {
-            let key = BoardMember.dedupBucketKey(for: member)
-            if groups[key] == nil {
-                groupOrder.append(key)
-                groups[key] = []
-            }
-            groups[key]?.append(member)
+        let groups = Dictionary(grouping: self) { member in
+            DedupBucketKey(
+                name: member.displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                weeklyKm: roundedToTenth(member.weeklyKilometers)
+            )
         }
 
         var result: [BoardMember] = []
-        for key in groupOrder {
-            guard let group = groups[key] else { continue }
+        result.reserveCapacity(groups.count)
+        for group in groups.values {
             if group.count == 1 {
                 result.append(group[0])
                 continue
             }
-            let distinctVo2s = Set(group.compactMap { $0.vo2Max.map(BoardMember.roundedToTenth) })
+            let distinctVo2s = Set(group.compactMap { $0.vo2Max.map(roundedToTenth) })
             if distinctVo2s.count <= 1 {
                 result.append(BoardMember.merge(group))
             } else {
@@ -69,29 +73,17 @@ extension Array where Element == BoardMember {
 }
 
 extension BoardMember {
-    fileprivate static func roundedToTenth(_ value: Double) -> Double {
-        (value * 10).rounded() / 10
-    }
-
-    fileprivate static func dedupBucketKey(for member: BoardMember) -> String {
-        let name = member.displayName
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        return "\(name)|\(roundedToTenth(member.weeklyKilometers))"
-    }
-
     fileprivate static func merge(_ group: [BoardMember]) -> BoardMember {
-        let ranked = group.sorted { a, b in
-            if a.isCurrentUser != b.isCurrentUser { return a.isCurrentUser }
-            if a.lastUpdated != b.lastUpdated { return a.lastUpdated > b.lastUpdated }
-            return a.id < b.id
-        }
-        let canonical = ranked[0]
+        let canonical = group.max { a, b in
+            if a.isCurrentUser != b.isCurrentUser { return b.isCurrentUser }
+            if a.lastUpdated != b.lastUpdated { return a.lastUpdated < b.lastUpdated }
+            return a.id > b.id
+        }!
 
         let vo2 = group
-            .sorted { $0.lastUpdated > $1.lastUpdated }
-            .compactMap { $0.vo2Max }
-            .first
+            .filter { $0.vo2Max != nil }
+            .max { $0.lastUpdated < $1.lastUpdated }
+            .flatMap { $0.vo2Max }
 
         var historyByWeek: [Date: (snapshot: WeeklySnapshot, updated: Date)] = [:]
         for member in group {
@@ -108,10 +100,10 @@ extension BoardMember {
             displayName: canonical.displayName,
             vo2Max: vo2,
             weeklyKilometers: canonical.weeklyKilometers,
-            lastUpdated: group.map { $0.lastUpdated }.max() ?? canonical.lastUpdated,
+            lastUpdated: group.lazy.map(\.lastUpdated).max()!,
             isCurrentUser: group.contains { $0.isCurrentUser },
-            statsHistory: historyByWeek.values.map { $0.snapshot }.sorted { $0.weekStart < $1.weekStart },
-            joinedDate: group.compactMap { $0.joinedDate }.min()
+            statsHistory: historyByWeek.values.map(\.snapshot).sorted { $0.weekStart < $1.weekStart },
+            joinedDate: group.compactMap(\.joinedDate).min()
         )
     }
 }
