@@ -97,8 +97,9 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
                 return results
             }
 
-            SharedDataStore.cacheMembers(members)
-            return members
+            let deduped = members.deduplicatedByNameAndStats()
+            SharedDataStore.cacheMembers(deduped)
+            return deduped
         } catch {
             return SharedDataStore.loadCachedMembers()
         }

@@ -46,7 +46,7 @@ enum SharedDataStore {
               let members = try? JSONDecoder().decode([BoardMember].self, from: data) else {
             return []
         }
-        return members
+        return members.deduplicatedByNameAndStats()
     }
 
     static func clearCache() {
