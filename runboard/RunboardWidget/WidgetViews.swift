@@ -115,26 +115,25 @@ struct MediumWidgetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("RUNBOARD")
                     .font(Theme.font(16))
                     .foregroundStyle(Theme.accent)
                     .tracking(2)
-                Spacer()
                 if let code = entry.boardCode {
                     Text(code)
                         .font(Theme.font(10))
                         .foregroundStyle(Theme.dimText)
                         .tracking(1)
                 }
+                Spacer()
+                Text(entry.statType.fullLabel)
+                    .font(Theme.font(9))
+                    .foregroundStyle(Theme.dimText)
+                    .tracking(1)
             }
-            .padding(.bottom, 4)
-
-            Text(entry.statType.fullLabel)
-                .font(Theme.font(9))
-                .foregroundStyle(Theme.dimText)
-                .tracking(1)
-                .padding(.bottom, 8)
+            .padding(.horizontal, 6)
+            .padding(.bottom, 8)
 
             let members = Array(entry.members.prefix(5))
             VStack(spacing: 5) {
