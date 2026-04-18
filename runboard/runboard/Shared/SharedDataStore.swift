@@ -8,8 +8,8 @@
 import Foundation
 
 enum SharedDataStore {
-    static let suiteName = "group.p3g3.runboard"
-    static let cloudKitContainerID = "iCloud.p3g3.runboard"
+    nonisolated static let suiteName = "group.p3g3.runboard"
+    nonisolated static let cloudKitContainerID = "iCloud.p3g3.runboard"
 
     static var defaults: UserDefaults = UserDefaults(suiteName: suiteName) ?? .standard
 
@@ -18,6 +18,7 @@ enum SharedDataStore {
         static let myRecordName = "myRecordName"
         static let displayName = "displayName"
         static let cachedMembers = "cachedMembers"
+        static let hkAnchorPrefix = "hkAnchor."
     }
 
     static var boardCode: String? {
@@ -51,5 +52,18 @@ enum SharedDataStore {
 
     static func clearCache() {
         defaults.removeObject(forKey: Keys.cachedMembers)
+    }
+
+    static func hkAnchorData(for typeIdentifier: String) -> Data? {
+        defaults.data(forKey: Keys.hkAnchorPrefix + typeIdentifier)
+    }
+
+    static func setHkAnchorData(_ data: Data?, for typeIdentifier: String) {
+        let key = Keys.hkAnchorPrefix + typeIdentifier
+        if let data {
+            defaults.set(data, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
     }
 }

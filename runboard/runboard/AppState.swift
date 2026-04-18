@@ -27,11 +27,13 @@ final class AppState {
 
     func refreshAndSync() async {
         guard !seeded else { return }
+
+        // Read HealthKit into the UI-facing observable so DashboardView reflects
+        // current values, then delegate the authoritative CloudKit upload to the
+        // coordinator. The coordinator also refreshes board members + reloads the
+        // widget timeline on completion.
         await healthKit.refreshAll()
-        await cloudKit.updateMyStats(
-            vo2Max: healthKit.vo2Max,
-            weeklyKilometers: healthKit.weeklyRunningKilometers
-        )
+        await BackgroundSyncCoordinator.shared.runUploadCycle(trigger: .foreground)
         await cloudKit.fetchBoardMembers()
     }
 }
