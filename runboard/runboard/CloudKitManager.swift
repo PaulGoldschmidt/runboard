@@ -8,6 +8,7 @@
 import Foundation
 import CloudKit
 import Observation
+import os
 import WidgetKit
 
 private enum RecordField {
@@ -139,34 +140,122 @@ final class CloudKitManager {
         }
     }
 
-    func updateMyStats(vo2Max: Double?, weeklyKilometers: Double) async {
+    func updateMyStats(vo2Max: Double?, weeklyKilometers: Double) async throws {
         guard let recordName = myRecordName else { return }
-
         let recordID = CKRecord.ID(recordName: recordName)
+        let weekStart = Self.currentWeekStart()
 
         do {
-            let record = try await database.record(for: recordID)
-            record[RecordField.vo2Max] = vo2Max.map { $0 as CKRecordValue }
-            record[RecordField.weeklyKilometers] = weeklyKilometers
-            record[RecordField.lastUpdated] = Date()
-
-            // Update stats history
-            var history = decodeHistory(from: record)
-            let weekStart = Self.currentWeekStart()
-            if let index = history.firstIndex(where: { $0.weekStart == weekStart }) {
-                history[index].weeklyKilometers = weeklyKilometers
-                history[index].vo2Max = vo2Max
-            } else {
-                history.append(WeeklySnapshot(weekStart: weekStart, weeklyKilometers: weeklyKilometers, vo2Max: vo2Max))
+            try await saveWithMerge(recordID: recordID) { record in
+                Self.applyStatsUpdate(
+                    to: record,
+                    vo2Max: vo2Max,
+                    weeklyKilometers: weeklyKilometers,
+                    weekStart: weekStart
+                )
             }
-            if let data = try? JSONEncoder().encode(history), let json = String(data: data, encoding: .utf8) {
-                record[RecordField.statsHistory] = json
-            }
-
-            try await database.save(record)
+            errorMessage = nil
         } catch {
+            SyncLog.cloudkit.error("updateMyStats failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = "Could not sync your stats."
+            throw error
         }
+    }
+
+    private func saveWithMerge(
+        recordID: CKRecord.ID,
+        maxRetries: Int = 3,
+        mutate: @escaping @Sendable (CKRecord) -> Void
+    ) async throws {
+        let db = database
+        var attempt = 0
+
+        while true {
+            attempt += 1
+            let record: CKRecord
+            do {
+                record = try await db.record(for: recordID)
+            } catch {
+                SyncLog.cloudkit.error("fetch before merge failed: \(error.localizedDescription, privacy: .public)")
+                throw error
+            }
+
+            mutate(record)
+
+            let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+            operation.savePolicy = .ifServerRecordUnchanged
+
+            do {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    operation.modifyRecordsResultBlock = { result in
+                        switch result {
+                        case .success: continuation.resume()
+                        case .failure(let error): continuation.resume(throwing: error)
+                        }
+                    }
+                    db.add(operation)
+                }
+                return
+            } catch let ckError as CKError where ckError.code == .serverRecordChanged {
+                guard attempt < maxRetries else {
+                    SyncLog.cloudkit.fault("serverRecordChanged retries exhausted")
+                    throw ckError
+                }
+                SyncLog.cloudkit.info("serverRecordChanged — retry \(attempt, privacy: .public)")
+                continue
+            } catch {
+                throw error
+            }
+        }
+    }
+
+    nonisolated static func applyStatsUpdate(
+        to record: CKRecord,
+        vo2Max: Double?,
+        weeklyKilometers: Double,
+        weekStart: Date
+    ) {
+        record[RecordField.vo2Max] = vo2Max.map { $0 as CKRecordValue }
+        record[RecordField.weeklyKilometers] = weeklyKilometers
+        record[RecordField.lastUpdated] = Date()
+
+        var history = Self.decodeHistoryRaw(record)
+        let incoming = WeeklySnapshot(weekStart: weekStart, weeklyKilometers: weeklyKilometers, vo2Max: vo2Max)
+        history = Self.mergeHistory(history, with: incoming)
+
+        if let data = try? JSONEncoder().encode(history), let json = String(data: data, encoding: .utf8) {
+            record[RecordField.statsHistory] = json
+        }
+    }
+
+    /// Union by `weekStart`. For the incoming week, take `max(weeklyKilometers)` across client & server
+    /// (weekly distance is monotonic within an open week), and prefer a non-nil incoming vo2Max.
+    /// Sorted descending by weekStart, capped to the most recent 52 entries.
+    nonisolated static func mergeHistory(_ existing: [WeeklySnapshot], with incoming: WeeklySnapshot) -> [WeeklySnapshot] {
+        var byWeek: [Date: WeeklySnapshot] = [:]
+        for snap in existing { byWeek[snap.weekStart] = snap }
+
+        if let current = byWeek[incoming.weekStart] {
+            byWeek[incoming.weekStart] = WeeklySnapshot(
+                weekStart: incoming.weekStart,
+                weeklyKilometers: max(current.weeklyKilometers, incoming.weeklyKilometers),
+                vo2Max: incoming.vo2Max ?? current.vo2Max
+            )
+        } else {
+            byWeek[incoming.weekStart] = incoming
+        }
+
+        let sorted = byWeek.values.sorted { $0.weekStart > $1.weekStart }
+        return Array(sorted.prefix(52))
+    }
+
+    nonisolated private static func decodeHistoryRaw(_ record: CKRecord) -> [WeeklySnapshot] {
+        guard let json = record["statsHistory"] as? String,
+              let data = json.data(using: .utf8),
+              let history = try? JSONDecoder().decode([WeeklySnapshot].self, from: data) else {
+            return []
+        }
+        return history
     }
 
     func leaveBoard() async {

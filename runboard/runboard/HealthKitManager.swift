@@ -8,6 +8,7 @@
 import Foundation
 import HealthKit
 import Observation
+import os
 
 @Observable
 final class HealthKitManager {
@@ -113,5 +114,85 @@ final class HealthKitManager {
         async let vo2 = fetchLatestVO2Max()
         async let distance = fetchWeeklyRunningDistance()
         _ = await (vo2, distance)
+    }
+
+    // MARK: - Background delivery & anchored queries
+
+    static let vo2MaxUnit: HKUnit = HKUnit.literUnit(with: .milli)
+        .unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: HKUnit.minute()))
+
+    static let observedTypes: [HKSampleType] = [
+        HKQuantityType(.vo2Max),
+        HKObjectType.workoutType()
+    ]
+
+    /// Registers the two observed sample types for iOS background delivery.
+    /// Must be called after `requestAuthorization()` has resolved to `.authorized`.
+    func enableBackgroundDelivery() async {
+        guard isAvailable else { return }
+        for type in Self.observedTypes {
+            do {
+                try await store.enableBackgroundDelivery(for: type, frequency: .hourly)
+                SyncLog.hk.info("background delivery enabled for \(type.identifier, privacy: .public)")
+            } catch {
+                SyncLog.hk.error("background delivery failed for \(type.identifier, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Runs an anchored query against the given sample type. Returns the new anchor.
+    /// Used by the background coordinator — we don't need the sample payloads, just
+    /// the anchor advance. The UI-facing weekly sum is re-aggregated separately.
+    func advanceAnchor(for type: HKSampleType, from anchorData: Data?) async throws -> Data {
+        guard isAvailable else { return anchorData ?? Data() }
+
+        let previousAnchor: HKQueryAnchor? = anchorData.flatMap {
+            try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: $0)
+        }
+
+        let newAnchor: HKQueryAnchor = try await withCheckedThrowingContinuation { continuation in
+            let query = HKAnchoredObjectQuery(
+                type: type,
+                predicate: nil,
+                anchor: previousAnchor,
+                limit: HKObjectQueryNoLimit
+            ) { _, _, _, returnedAnchor, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: returnedAnchor ?? HKQueryAnchor(fromValue: 0))
+                }
+            }
+            store.execute(query)
+        }
+
+        return try NSKeyedArchiver.archivedData(withRootObject: newAnchor, requiringSecureCoding: true)
+    }
+
+    /// Attaches an observer query for each observed type. The `handler` is invoked on a
+    /// background queue when iOS wakes the app with new samples; it must call `completion`
+    /// within ~30 seconds or iOS will throttle future deliveries. Retain the returned
+    /// queries for the lifetime of observation.
+    func attachObservers(handler: @escaping @Sendable (HKSampleType, @escaping @Sendable () -> Void) -> Void) -> [HKObserverQuery] {
+        guard isAvailable else { return [] }
+        var queries: [HKObserverQuery] = []
+        for type in Self.observedTypes {
+            let query = HKObserverQuery(sampleType: type, predicate: nil) { _, rawCompletion, error in
+                // HealthKit's completion handler isn't Sendable by default; wrap it
+                // in an UncheckedSendable box so we can forward it across a Task boundary.
+                let completion: @Sendable () -> Void = {
+                    rawCompletion()
+                }
+                if let error {
+                    SyncLog.observer.error("observer error for \(type.identifier, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    completion()
+                    return
+                }
+                handler(type, completion)
+            }
+            store.execute(query)
+            queries.append(query)
+        }
+        return queries
     }
 }
