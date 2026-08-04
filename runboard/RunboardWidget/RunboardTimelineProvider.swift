@@ -80,13 +80,15 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
                 for memberID in memberIDs {
                     group.addTask {
                         guard let record = try? await db.record(for: memberID) else { return nil }
+                        let history = [WeeklySnapshot].decodedHistory(fromJSON: record["statsHistory"] as? String)
                         return BoardMember(
                             id: memberID.recordName,
                             displayName: record["displayName"] as? String ?? "Unknown",
                             vo2Max: record["vo2Max"] as? Double,
                             weeklyKilometers: record["weeklyKilometers"] as? Double ?? 0.0,
                             lastUpdated: record["lastUpdated"] as? Date ?? Date(),
-                            isCurrentUser: memberID.recordName == myRecordName
+                            isCurrentUser: memberID.recordName == myRecordName,
+                            statsHistory: history
                         )
                     }
                 }
@@ -97,7 +99,7 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
                 return results
             }
 
-            let deduped = members.deduplicatedByNameAndStats()
+            let deduped = members.deduplicatedByNameAndStats().map { $0.backfillingVo2FromHistory() }
             SharedDataStore.cacheMembers(deduped)
             return deduped
         } catch {

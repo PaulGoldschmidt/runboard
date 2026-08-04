@@ -78,6 +78,34 @@ extension Array where Element == BoardMember {
     }
 }
 
+extension Array where Element == WeeklySnapshot {
+    /// Decodes the statsHistory JSON stored on a member record, sorted by week
+    /// ascending. Returns [] for missing or undecodable payloads.
+    static func decodedHistory(fromJSON json: String?) -> [WeeklySnapshot] {
+        guard let json,
+              let data = json.data(using: .utf8),
+              let history = try? JSONDecoder().decode([WeeklySnapshot].self, from: data) else {
+            return []
+        }
+        return history.sorted { $0.weekStart < $1.weekStart }
+    }
+}
+
+extension BoardMember {
+    /// Fills a missing flat vo2Max from the newest history entry, for members
+    /// whose flat field was wiped by an app version that cleared it on failed
+    /// HealthKit reads. Must run AFTER deduplication: dedup treats a nil vo2 as
+    /// a merge wildcard, and backfilling first would turn wiped ghost records
+    /// into false vo2 conflicts that resurface as duplicate rows.
+    func backfillingVo2FromHistory() -> BoardMember {
+        guard vo2Max == nil,
+              let historic = statsHistory.last(where: { $0.vo2Max != nil })?.vo2Max else { return self }
+        var filled = self
+        filled.vo2Max = historic
+        return filled
+    }
+}
+
 extension BoardMember {
     /// Kilometers to show for the running week. `weeklyKilometers` is whatever
     /// this member's own device last pushed; a push from before the current ISO

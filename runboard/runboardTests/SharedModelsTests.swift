@@ -189,6 +189,64 @@ struct ActiveMembersTests {
     }
 }
 
+// MARK: - Decoded History Tests
+
+struct DecodedHistoryTests {
+
+    @Test func roundtripSortedAscending() throws {
+        let snapshots = [
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 2_000_000), weeklyKilometers: 20, vo2Max: nil),
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 1_000_000), weeklyKilometers: 10, vo2Max: 50),
+        ]
+        let json = String(data: try JSONEncoder().encode(snapshots), encoding: .utf8)
+        let decoded = [WeeklySnapshot].decodedHistory(fromJSON: json)
+        #expect(decoded.map(\.weeklyKilometers) == [10, 20])
+    }
+
+    @Test func nilAndGarbageYieldEmpty() {
+        #expect([WeeklySnapshot].decodedHistory(fromJSON: nil).isEmpty)
+        #expect([WeeklySnapshot].decodedHistory(fromJSON: "not json").isEmpty)
+    }
+}
+
+// MARK: - VO2 Backfill Tests
+
+struct Vo2BackfillTests {
+
+    private func makeMember(vo2Max: Double?, history: [WeeklySnapshot]) -> BoardMember {
+        BoardMember(
+            id: "m",
+            displayName: "M",
+            vo2Max: vo2Max,
+            weeklyKilometers: 0,
+            lastUpdated: Date(timeIntervalSince1970: 1_000_000),
+            statsHistory: history
+        )
+    }
+
+    @Test func fillsMissingVo2FromNewestHistoryEntry() {
+        let history = [
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 1_000_000), weeklyKilometers: 10, vo2Max: 48.0),
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 2_000_000), weeklyKilometers: 12, vo2Max: 51.5),
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 3_000_000), weeklyKilometers: 8, vo2Max: nil),
+        ]
+        let filled = makeMember(vo2Max: nil, history: history).backfillingVo2FromHistory()
+        #expect(filled.vo2Max == 51.5)
+    }
+
+    @Test func keepsExistingFlatVo2() {
+        let history = [WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 1_000_000), weeklyKilometers: 10, vo2Max: 48.0)]
+        let member = makeMember(vo2Max: 52.0, history: history).backfillingVo2FromHistory()
+        #expect(member.vo2Max == 52.0)
+    }
+
+    @Test func staysNilWithoutAnyHistoryVo2() {
+        let history = [WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 1_000_000), weeklyKilometers: 10, vo2Max: nil)]
+        #expect(makeMember(vo2Max: nil, history: history).backfillingVo2FromHistory().vo2Max == nil)
+        #expect(makeMember(vo2Max: nil, history: []).backfillingVo2FromHistory().vo2Max == nil)
+    }
+}
+
 // MARK: - Current Week Kilometers Tests
 
 struct CurrentWeekKilometersTests {

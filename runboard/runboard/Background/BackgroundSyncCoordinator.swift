@@ -31,6 +31,7 @@ final class BackgroundSyncCoordinator {
     private var didEnableBackgroundDelivery = false
     private var lastSyncAt: Date = .distantPast
     private var inflight: Task<Void, Never>?
+    private var cycleGeneration = 0
 
     private init() {}
 
@@ -119,7 +120,7 @@ final class BackgroundSyncCoordinator {
             return
         }
 
-        if let existing = inflight {
+        while let existing = inflight {
             await existing.value
             if case .foreground = trigger { return }
         }
@@ -127,13 +128,21 @@ final class BackgroundSyncCoordinator {
         let task = Task { @MainActor in
             await performUpload(trigger: trigger)
         }
+        cycleGeneration += 1
+        let generation = cycleGeneration
         inflight = task
         await task.value
-        inflight = nil
+        // Another trigger may have replaced inflight while we were suspended;
+        // only clear our own registration or its cycle would run untracked.
+        if cycleGeneration == generation {
+            inflight = nil
+        }
     }
 
     private func performUpload(trigger: Trigger) async {
-        await drainRetryQueue()
+        // The UI joins/leaves boards through its own CloudKitManager instance;
+        // ours only sees that via the shared store.
+        cloudKit.reloadIdentityFromStore()
 
         guard cloudKit.hasBoard else {
             SyncLog.cloudkit.debug("no board joined — skipping upload")
@@ -146,13 +155,26 @@ final class BackgroundSyncCoordinator {
             SyncLog.hk.error("anchor advance failed: \(error.localizedDescription, privacy: .public)")
         }
 
-        await healthKit.refreshAll()
-        let vo2 = healthKit.vo2Max
+        let outcome = await healthKit.refreshAll()
+
+        // A failed distance read (locked device, auth pending, transient error)
+        // must not be published as 0 km. Give any queued good snapshot a chance
+        // instead and try again next cycle.
+        guard outcome.distanceSucceeded else {
+            SyncLog.hk.error("weekly distance read failed — skipping upload this cycle")
+            await drainRetryQueue()
+            return
+        }
+
+        // Same rule for VO2: on a failed read, push nil, which updateMyStats
+        // treats as "leave the server value alone".
+        let vo2 = outcome.vo2Succeeded ? healthKit.vo2Max : nil
         let km = healthKit.weeklyRunningKilometers
-        let weekStart = CloudKitManager.currentWeekStart()
+        let weekStart = healthKit.lastDistanceWeekStart ?? CloudKitManager.currentWeekStart()
 
         do {
-            try await cloudKit.updateMyStats(vo2Max: vo2, weeklyKilometers: km)
+            try await cloudKit.updateMyStats(vo2Max: vo2, weeklyKilometers: km, weekStart: weekStart)
+            await RetryQueue.shared.clear()
             lastSyncAt = Date()
             await cloudKit.fetchBoardMembers()
             WidgetCenter.shared.reloadAllTimelines()
@@ -180,16 +202,37 @@ final class BackgroundSyncCoordinator {
     private func drainRetryQueue() async {
         let pending = await RetryQueue.shared.snapshot()
         guard !pending.isEmpty else { return }
-        SyncLog.queue.info("draining \(pending.count, privacy: .public) pending uploads")
 
-        for entry in pending {
-            do {
-                try await cloudKit.updateMyStats(vo2Max: entry.vo2Max, weeklyKilometers: entry.weeklyKilometers)
-                await RetryQueue.shared.remove(id: entry.id)
-            } catch {
-                SyncLog.queue.error("retry still failing; leaving in queue: \(error.localizedDescription, privacy: .public)")
-                return
-            }
+        // Only the newest snapshot from the current week is worth replaying:
+        // older entries are superseded by it, and entries from a previous week
+        // must never be written under the current week's stamp.
+        guard let entry = Self.newestCurrentWeekEntry(
+            in: pending,
+            currentWeek: CloudKitManager.currentWeekStart()
+        ) else {
+            SyncLog.queue.info("dropping \(pending.count, privacy: .public) stale pending uploads")
+            await RetryQueue.shared.clear()
+            return
         }
+
+        SyncLog.queue.info("replaying newest of \(pending.count, privacy: .public) pending uploads")
+        do {
+            try await cloudKit.updateMyStats(vo2Max: entry.vo2Max, weeklyKilometers: entry.weeklyKilometers, weekStart: entry.weekStart)
+            await RetryQueue.shared.clear()
+        } catch {
+            SyncLog.queue.error("retry still failing; leaving in queue: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: - Testable policy
+
+    /// Timezone changes shift the local ISO week start by up to ~a day, so
+    /// same-week entries are matched with tolerance rather than exact equality;
+    /// entries from other weeks are ~7 days away and never match.
+    nonisolated static func newestCurrentWeekEntry(
+        in entries: [PendingUpload],
+        currentWeek: Date
+    ) -> PendingUpload? {
+        entries.last { abs($0.weekStart.timeIntervalSince(currentWeek)) < 26 * 3_600 }
     }
 }
