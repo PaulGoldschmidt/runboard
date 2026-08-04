@@ -65,6 +65,10 @@ struct StatsGraphView: View {
         }
         .chartLegend(.hidden)
         .frame(height: 200)
+        // New identity per stat type: crossfade between the two datasets
+        // instead of morphing one into the other.
+        .id(statType)
+        .transition(.opacity)
     }
 
     // MARK: - Legend
