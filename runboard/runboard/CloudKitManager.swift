@@ -53,6 +53,15 @@ final class CloudKitManager {
         SharedDataStore.displayName = myDisplayName
     }
 
+    /// Re-reads board identity from the shared store. The sync coordinator holds
+    /// its own instance whose init-time snapshot goes stale when the user joins,
+    /// creates, or leaves a board through the UI's instance mid-session.
+    func reloadIdentityFromStore() {
+        currentBoardCode = SharedDataStore.boardCode
+        myRecordName = SharedDataStore.myRecordName
+        myDisplayName = SharedDataStore.displayName
+    }
+
     // MARK: - Board Operations
 
     func createBoard(displayName: String) async throws {
@@ -126,7 +135,9 @@ final class CloudKitManager {
             let memberNames = (boardRecord[RecordField.memberRecordNames] as? [String]) ?? []
             let memberIDs = memberNames.map { CKRecord.ID(recordName: $0) }
 
-            let fetched = await fetchMemberRecords(ids: memberIDs).deduplicatedByNameAndStats()
+            let fetched = await fetchMemberRecords(ids: memberIDs)
+                .deduplicatedByNameAndStats()
+                .map { $0.backfillingVo2FromHistory() }
 
             if members != fetched {
                 members = fetched
@@ -140,10 +151,12 @@ final class CloudKitManager {
         }
     }
 
-    func updateMyStats(vo2Max: Double?, weeklyKilometers: Double) async throws {
+    func updateMyStats(vo2Max: Double?, weeklyKilometers: Double, weekStart: Date? = nil) async throws {
         guard let recordName = myRecordName else { return }
         let recordID = CKRecord.ID(recordName: recordName)
-        let weekStart = Self.currentWeekStart()
+        // Callers pass the week the kilometers were actually summed over, so a
+        // push that lands after a week rollover is still filed under its week.
+        let weekStart = weekStart ?? Self.currentWeekStart()
 
         do {
             try await saveWithMerge(recordID: recordID) { record in
@@ -215,7 +228,11 @@ final class CloudKitManager {
         weeklyKilometers: Double,
         weekStart: Date
     ) {
-        record[RecordField.vo2Max] = vo2Max.map { $0 as CKRecordValue }
+        // nil means "no VO2 reading this cycle", never "delete": a failed or
+        // empty HealthKit read must not wipe the last known server value.
+        if let vo2Max {
+            record[RecordField.vo2Max] = vo2Max as CKRecordValue
+        }
         record[RecordField.weeklyKilometers] = weeklyKilometers
         record[RecordField.lastUpdated] = Date()
 
@@ -309,31 +326,21 @@ final class CloudKitManager {
     }
 
     nonisolated private func parseMember(from record: CKRecord, id: CKRecord.ID, currentRecordName: String?) -> BoardMember {
-        BoardMember(
+        let history = [WeeklySnapshot].decodedHistory(fromJSON: record["statsHistory"] as? String)
+        return BoardMember(
             id: id.recordName,
             displayName: record["displayName"] as? String ?? "Unknown",
             vo2Max: record["vo2Max"] as? Double,
             weeklyKilometers: record["weeklyKilometers"] as? Double ?? 0.0,
             lastUpdated: record["lastUpdated"] as? Date ?? Date(),
             isCurrentUser: id.recordName == currentRecordName,
-            statsHistory: decodeHistory(from: record),
+            statsHistory: history,
             joinedDate: record.creationDate
         )
     }
 
-    nonisolated private func decodeHistory(from record: CKRecord) -> [WeeklySnapshot] {
-        guard let json = record["statsHistory"] as? String,
-              let data = json.data(using: .utf8),
-              let history = try? JSONDecoder().decode([WeeklySnapshot].self, from: data) else {
-            return []
-        }
-        return history.sorted { $0.weekStart < $1.weekStart }
-    }
-
     nonisolated static func currentWeekStart() -> Date {
-        let calendar = Calendar(identifier: .iso8601)
-        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
-        return calendar.date(from: components) ?? Date()
+        BoardMember.weekStart(containing: Date())
     }
 
     private func fetchMemberRecords(ids: [CKRecord.ID]) async -> [BoardMember] {

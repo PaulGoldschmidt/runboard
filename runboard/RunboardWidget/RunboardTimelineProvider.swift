@@ -80,13 +80,15 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
                 for memberID in memberIDs {
                     group.addTask {
                         guard let record = try? await db.record(for: memberID) else { return nil }
+                        let history = [WeeklySnapshot].decodedHistory(fromJSON: record["statsHistory"] as? String)
                         return BoardMember(
                             id: memberID.recordName,
                             displayName: record["displayName"] as? String ?? "Unknown",
                             vo2Max: record["vo2Max"] as? Double,
                             weeklyKilometers: record["weeklyKilometers"] as? Double ?? 0.0,
                             lastUpdated: record["lastUpdated"] as? Date ?? Date(),
-                            isCurrentUser: memberID.recordName == myRecordName
+                            isCurrentUser: memberID.recordName == myRecordName,
+                            statsHistory: history
                         )
                     }
                 }
@@ -97,7 +99,7 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
                 return results
             }
 
-            let deduped = members.deduplicatedByNameAndStats()
+            let deduped = members.deduplicatedByNameAndStats().map { $0.backfillingVo2FromHistory() }
             SharedDataStore.cacheMembers(deduped)
             return deduped
         } catch {
@@ -110,11 +112,12 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
     }
 
     private static func sorted(_ members: [BoardMember], by statType: WidgetStatType) -> [BoardMember] {
+        let active = members.activeMembers()
         switch statType {
         case .weeklyKm:
-            return members.sorted { $0.weeklyKilometers > $1.weeklyKilometers }
+            return active.sorted { $0.currentWeekKilometers() > $1.currentWeekKilometers() }
         case .vo2Max:
-            return members.sorted { ($0.vo2Max ?? -1) > ($1.vo2Max ?? -1) }
+            return active.sorted { ($0.vo2Max ?? -1) > ($1.vo2Max ?? -1) }
         }
     }
 

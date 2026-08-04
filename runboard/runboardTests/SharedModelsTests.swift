@@ -130,3 +130,150 @@ struct BoardErrorTests {
         #expect(error.errorDescription == "No board found with that code.")
     }
 }
+
+// MARK: - Active Members Tests
+
+struct ActiveMembersTests {
+
+    private let now = Date(timeIntervalSince1970: 100_000_000)
+
+    private func makeMember(id: String, lastUpdated: Date, isCurrentUser: Bool = false) -> BoardMember {
+        BoardMember(
+            id: id,
+            displayName: id,
+            vo2Max: nil,
+            weeklyKilometers: 0,
+            lastUpdated: lastUpdated,
+            isCurrentUser: isCurrentUser
+        )
+    }
+
+    @Test func keepsRecentlyUpdatedMembers() {
+        let members = [
+            makeMember(id: "fresh", lastUpdated: now.addingTimeInterval(-3 * 86_400)),
+            makeMember(id: "justNow", lastUpdated: now)
+        ]
+        #expect(members.activeMembers(asOf: now).map(\.id) == ["fresh", "justNow"])
+    }
+
+    @Test func hidesMembersStaleForOverTwoWeeks() {
+        let members = [
+            makeMember(id: "stale", lastUpdated: now.addingTimeInterval(-15 * 86_400)),
+            makeMember(id: "fresh", lastUpdated: now.addingTimeInterval(-86_400))
+        ]
+        #expect(members.activeMembers(asOf: now).map(\.id) == ["fresh"])
+    }
+
+    @Test func hidesMemberAtExactlyTwoWeeks() {
+        let members = [makeMember(id: "boundary", lastUpdated: now.addingTimeInterval(-14 * 86_400))]
+        #expect(members.activeMembers(asOf: now).isEmpty)
+    }
+
+    @Test func keepsMemberJustUnderTwoWeeks() {
+        let members = [makeMember(id: "almost", lastUpdated: now.addingTimeInterval(-14 * 86_400 + 1))]
+        #expect(members.activeMembers(asOf: now).map(\.id) == ["almost"])
+    }
+
+    @Test func alwaysKeepsCurrentUser() {
+        let members = [
+            makeMember(id: "me", lastUpdated: now.addingTimeInterval(-30 * 86_400), isCurrentUser: true),
+            makeMember(id: "stale", lastUpdated: now.addingTimeInterval(-30 * 86_400))
+        ]
+        #expect(members.activeMembers(asOf: now).map(\.id) == ["me"])
+    }
+
+    @Test func customWindow() {
+        let members = [makeMember(id: "m", lastUpdated: now.addingTimeInterval(-10 * 86_400))]
+        #expect(members.activeMembers(within: 7, asOf: now).isEmpty)
+        #expect(members.activeMembers(within: 21, asOf: now).map(\.id) == ["m"])
+    }
+}
+
+// MARK: - Decoded History Tests
+
+struct DecodedHistoryTests {
+
+    @Test func roundtripSortedAscending() throws {
+        let snapshots = [
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 2_000_000), weeklyKilometers: 20, vo2Max: nil),
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 1_000_000), weeklyKilometers: 10, vo2Max: 50),
+        ]
+        let json = String(data: try JSONEncoder().encode(snapshots), encoding: .utf8)
+        let decoded = [WeeklySnapshot].decodedHistory(fromJSON: json)
+        #expect(decoded.map(\.weeklyKilometers) == [10, 20])
+    }
+
+    @Test func nilAndGarbageYieldEmpty() {
+        #expect([WeeklySnapshot].decodedHistory(fromJSON: nil).isEmpty)
+        #expect([WeeklySnapshot].decodedHistory(fromJSON: "not json").isEmpty)
+    }
+}
+
+// MARK: - VO2 Backfill Tests
+
+struct Vo2BackfillTests {
+
+    private func makeMember(vo2Max: Double?, history: [WeeklySnapshot]) -> BoardMember {
+        BoardMember(
+            id: "m",
+            displayName: "M",
+            vo2Max: vo2Max,
+            weeklyKilometers: 0,
+            lastUpdated: Date(timeIntervalSince1970: 1_000_000),
+            statsHistory: history
+        )
+    }
+
+    @Test func fillsMissingVo2FromNewestHistoryEntry() {
+        let history = [
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 1_000_000), weeklyKilometers: 10, vo2Max: 48.0),
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 2_000_000), weeklyKilometers: 12, vo2Max: 51.5),
+            WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 3_000_000), weeklyKilometers: 8, vo2Max: nil),
+        ]
+        let filled = makeMember(vo2Max: nil, history: history).backfillingVo2FromHistory()
+        #expect(filled.vo2Max == 51.5)
+    }
+
+    @Test func keepsExistingFlatVo2() {
+        let history = [WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 1_000_000), weeklyKilometers: 10, vo2Max: 48.0)]
+        let member = makeMember(vo2Max: 52.0, history: history).backfillingVo2FromHistory()
+        #expect(member.vo2Max == 52.0)
+    }
+
+    @Test func staysNilWithoutAnyHistoryVo2() {
+        let history = [WeeklySnapshot(weekStart: Date(timeIntervalSince1970: 1_000_000), weeklyKilometers: 10, vo2Max: nil)]
+        #expect(makeMember(vo2Max: nil, history: history).backfillingVo2FromHistory().vo2Max == nil)
+        #expect(makeMember(vo2Max: nil, history: []).backfillingVo2FromHistory().vo2Max == nil)
+    }
+}
+
+// MARK: - Current Week Kilometers Tests
+
+struct CurrentWeekKilometersTests {
+
+    private let weekStart = BoardMember.weekStart(containing: Date(timeIntervalSince1970: 1_800_000_000))
+    private var midWeek: Date { weekStart.addingTimeInterval(3 * 86_400) }
+
+    private func makeMember(km: Double, lastUpdated: Date) -> BoardMember {
+        BoardMember(id: "m", displayName: "M", vo2Max: nil, weeklyKilometers: km, lastUpdated: lastUpdated)
+    }
+
+    @Test func countsKmPushedThisWeek() {
+        let member = makeMember(km: 42.0, lastUpdated: weekStart.addingTimeInterval(3_600))
+        #expect(member.currentWeekKilometers(asOf: midWeek) == 42.0)
+    }
+
+    @Test func zeroesKmPushedBeforeThisWeek() {
+        let member = makeMember(km: 55.0, lastUpdated: weekStart.addingTimeInterval(-3_600))
+        #expect(member.currentWeekKilometers(asOf: midWeek) == 0.0)
+    }
+
+    @Test func countsKmPushedExactlyAtWeekStart() {
+        let member = makeMember(km: 12.0, lastUpdated: weekStart)
+        #expect(member.currentWeekKilometers(asOf: midWeek) == 12.0)
+    }
+
+    @Test func weekStartIsStableWithinWeek() {
+        #expect(BoardMember.weekStart(containing: midWeek) == weekStart)
+    }
+}

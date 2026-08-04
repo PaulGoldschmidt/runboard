@@ -22,6 +22,10 @@ final class HealthKitManager {
     var status: Status = .notDetermined
     var vo2Max: Double?
     var weeklyRunningKilometers: Double = 0.0
+    /// Start of the week `weeklyRunningKilometers` was last summed over, so the
+    /// sync layer can stamp a push with the week the data belongs to even if
+    /// the push itself lands after a week rollover.
+    private(set) var lastDistanceWeekStart: Date?
 
     private let store = HKHealthStore()
 
@@ -49,38 +53,64 @@ final class HealthKitManager {
         }
     }
 
-    func fetchLatestVO2Max() async {
-        guard isAvailable else { return }
+    /// Outcome of a refreshAll pass. A `false` flag means the read FAILED
+    /// (device locked, authorization not determined, transient HK error) and the
+    /// corresponding stored value was left untouched — callers must not treat it
+    /// as "user has no data" or publish it anywhere.
+    struct RefreshOutcome {
+        let vo2Succeeded: Bool
+        let distanceSucceeded: Bool
+    }
+
+    @discardableResult
+    func fetchLatestVO2Max() async -> Bool {
+        guard isAvailable else { return false }
 
         let vo2MaxType = HKQuantityType(.vo2Max)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
-        let sample: HKQuantitySample? = await withCheckedContinuation { continuation in
+        let result: Result<HKQuantitySample?, Error> = await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: vo2MaxType,
                 predicate: nil,
                 limit: 1,
                 sortDescriptors: [sortDescriptor]
-            ) { _, results, _ in
-                continuation.resume(returning: results?.first as? HKQuantitySample)
+            ) { _, results, error in
+                if let error {
+                    continuation.resume(returning: .failure(error))
+                } else {
+                    continuation.resume(returning: .success(results?.first as? HKQuantitySample))
+                }
             }
             store.execute(query)
         }
 
-        if let sample {
-            let unit = HKUnit.literUnit(with: .milli).unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: HKUnit.minute()))
-            vo2Max = sample.quantity.doubleValue(for: unit)
-        } else {
-            vo2Max = nil
+        switch result {
+        case .failure(let error):
+            SyncLog.hk.error("vo2Max query failed — keeping previous value: \(error.localizedDescription, privacy: .public)")
+            return false
+        case .success(let sample):
+            if let sample {
+                let unit = HKUnit.literUnit(with: .milli).unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: HKUnit.minute()))
+                vo2Max = sample.quantity.doubleValue(for: unit)
+            } else {
+                // An error-free empty result: either genuinely no samples or
+                // read access denied (HealthKit hides denial). Reflect it
+                // locally, but the sync layer never clears the server from nil.
+                vo2Max = nil
+            }
+            return true
         }
     }
 
-    func fetchWeeklyRunningDistance() async {
-        guard isAvailable else { return }
+    @discardableResult
+    func fetchWeeklyRunningDistance() async -> Bool {
+        guard isAvailable else { return false }
 
-        guard let weekInterval = Calendar.current.dateInterval(of: .weekOfYear, for: Date()) else {
-            weeklyRunningKilometers = 0.0
-            return
+        // ISO week (Monday start) to match the board's week model everywhere
+        // else; Calendar.current would start the week on Sunday in some locales.
+        guard let weekInterval = Calendar(identifier: .iso8601).dateInterval(of: .weekOfYear, for: Date()) else {
+            return false
         }
 
         let predicate = HKQuery.predicateForSamples(
@@ -91,29 +121,41 @@ final class HealthKitManager {
         let workoutPredicate = HKQuery.predicateForWorkouts(with: .running)
         let compoundPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, workoutPredicate])
 
-        let workouts: [HKWorkout] = await withCheckedContinuation { continuation in
+        let result: Result<[HKWorkout], Error> = await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: HKObjectType.workoutType(),
                 predicate: compoundPredicate,
                 limit: HKObjectQueryNoLimit,
                 sortDescriptors: nil
-            ) { _, results, _ in
-                continuation.resume(returning: (results as? [HKWorkout]) ?? [])
+            ) { _, results, error in
+                if let error {
+                    continuation.resume(returning: .failure(error))
+                } else {
+                    continuation.resume(returning: .success((results as? [HKWorkout]) ?? []))
+                }
             }
             store.execute(query)
         }
 
-        let totalMeters = workouts.compactMap { workout in
-            workout.totalDistance?.doubleValue(for: .meter())
-        }.reduce(0, +)
-
-        weeklyRunningKilometers = totalMeters / 1000.0
+        switch result {
+        case .failure(let error):
+            SyncLog.hk.error("workout query failed — keeping previous value: \(error.localizedDescription, privacy: .public)")
+            return false
+        case .success(let workouts):
+            let totalMeters = workouts.compactMap { workout in
+                workout.totalDistance?.doubleValue(for: .meter())
+            }.reduce(0, +)
+            weeklyRunningKilometers = totalMeters / 1000.0
+            lastDistanceWeekStart = weekInterval.start
+            return true
+        }
     }
 
-    func refreshAll() async {
+    @discardableResult
+    func refreshAll() async -> RefreshOutcome {
         async let vo2 = fetchLatestVO2Max()
         async let distance = fetchWeeklyRunningDistance()
-        _ = await (vo2, distance)
+        return await RefreshOutcome(vo2Succeeded: vo2, distanceSucceeded: distance)
     }
 
     // MARK: - Background delivery & anchored queries

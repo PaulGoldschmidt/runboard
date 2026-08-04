@@ -47,16 +47,22 @@ extension Array where Element == BoardMember {
     func deduplicatedByNameAndStats() -> [BoardMember] {
         guard count > 1 else { return self }
 
-        let groups = Dictionary(grouping: self) { member in
+        let keyFor: (BoardMember) -> DedupBucketKey = { member in
             DedupBucketKey(
                 name: member.displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
                 weeklyKm: roundedToTenth(member.weeklyKilometers)
             )
         }
+        let groups = Dictionary(grouping: self, by: keyFor)
 
+        // Emit groups in first-occurrence order; iterating groups.values directly
+        // would randomize the order per process (seeded dictionary hashing).
+        var emitted = Set<DedupBucketKey>()
         var result: [BoardMember] = []
         result.reserveCapacity(groups.count)
-        for group in groups.values {
+        for member in self {
+            let key = keyFor(member)
+            guard emitted.insert(key).inserted, let group = groups[key] else { continue }
             if group.count == 1 {
                 result.append(group[0])
                 continue
@@ -69,6 +75,59 @@ extension Array where Element == BoardMember {
             }
         }
         return result
+    }
+}
+
+extension Array where Element == WeeklySnapshot {
+    /// Decodes the statsHistory JSON stored on a member record, sorted by week
+    /// ascending. Returns [] for missing or undecodable payloads.
+    static func decodedHistory(fromJSON json: String?) -> [WeeklySnapshot] {
+        guard let json,
+              let data = json.data(using: .utf8),
+              let history = try? JSONDecoder().decode([WeeklySnapshot].self, from: data) else {
+            return []
+        }
+        return history.sorted { $0.weekStart < $1.weekStart }
+    }
+}
+
+extension BoardMember {
+    /// Fills a missing flat vo2Max from the newest history entry, for members
+    /// whose flat field was wiped by an app version that cleared it on failed
+    /// HealthKit reads. Must run AFTER deduplication: dedup treats a nil vo2 as
+    /// a merge wildcard, and backfilling first would turn wiped ghost records
+    /// into false vo2 conflicts that resurface as duplicate rows.
+    func backfillingVo2FromHistory() -> BoardMember {
+        guard vo2Max == nil,
+              let historic = statsHistory.last(where: { $0.vo2Max != nil })?.vo2Max else { return self }
+        var filled = self
+        filled.vo2Max = historic
+        return filled
+    }
+}
+
+extension BoardMember {
+    /// Kilometers to show for the running week. `weeklyKilometers` is whatever
+    /// this member's own device last pushed; a push from before the current ISO
+    /// week is last week's total, so it counts as 0 until they sync again.
+    func currentWeekKilometers(asOf now: Date = Date()) -> Double {
+        lastUpdated >= Self.weekStart(containing: now) ? weeklyKilometers : 0
+    }
+
+    static func weekStart(containing date: Date) -> Date {
+        let calendar = Calendar(identifier: .iso8601)
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+        return calendar.date(from: components) ?? date
+    }
+}
+
+extension Array where Element == BoardMember {
+    /// Members whose data is fresh enough to show on the board. Members who
+    /// haven't submitted anything for `days` days (default: two weeks) are
+    /// hidden; the current user is always kept so their own row stays visible.
+    func activeMembers(within days: Int = 14, asOf now: Date = Date()) -> [BoardMember] {
+        let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
+        return filter { $0.isCurrentUser || $0.lastUpdated > cutoff }
     }
 }
 
