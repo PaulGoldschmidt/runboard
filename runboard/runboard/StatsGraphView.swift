@@ -11,6 +11,7 @@ import Charts
 struct StatsGraphView: View {
     let members: [BoardMember]
     let statType: StatType
+    let memberColors: [String: Color]
 
     private var yLabel: String {
         statType == .weeklyKm ? "KM" : "VO2"
@@ -75,10 +76,10 @@ struct StatsGraphView: View {
 
     private var legend: some View {
         FlowLayout(spacing: 12) {
-            ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
+            ForEach(members) { member in
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Theme.chartColor(forRank: index + 1))
+                        .fill(color(for: member))
                         .frame(width: 8, height: 8)
                     Text(member.displayName.uppercased())
                         .font(Theme.font(10))
@@ -99,9 +100,13 @@ struct StatsGraphView: View {
         let color: Color
     }
 
+    private func color(for member: BoardMember) -> Color {
+        memberColors[member.id] ?? Theme.dimText
+    }
+
     private var chartData: [ChartPoint] {
-        members.enumerated().flatMap { index, member in
-            let color = Theme.chartColor(forRank: index + 1)
+        members.flatMap { member in
+            let color = color(for: member)
             return member.statsHistory.compactMap { snapshot -> ChartPoint? in
                 let value: Double?
                 switch statType {

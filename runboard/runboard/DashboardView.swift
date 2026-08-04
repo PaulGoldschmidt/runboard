@@ -21,7 +21,7 @@ struct DashboardView: View {
                 headerView
                 statToggle
                 if sorted.count >= 2 && sorted.contains(where: { $0.statsHistory.count >= 2 }) {
-                    StatsGraphView(members: sorted, statType: selectedStat)
+                    StatsGraphView(members: sorted, statType: selectedStat, memberColors: memberColors)
                 }
                 leaderboardList(sorted)
             }
@@ -111,6 +111,19 @@ struct DashboardView: View {
         case .vo2Max:
             return members.sorted { ($0.vo2Max ?? -1) > ($1.vo2Max ?? -1) }
         }
+    }
+
+    // Colors are assigned over the full member list in join order, so a member
+    // keeps their color when ranks change or inactive members are hidden.
+    private var memberColors: [String: Color] {
+        let stableOrder = appState.cloudKit.members.sorted {
+            ($0.joinedDate ?? .distantPast, $0.id) < ($1.joinedDate ?? .distantPast, $1.id)
+        }
+        var colors: [String: Color] = [:]
+        for (index, member) in stableOrder.enumerated() {
+            colors[member.id] = Theme.chartColor(forIndex: index)
+        }
+        return colors
     }
 
     private func leaderboardList(_ sorted: [BoardMember]) -> some View {
