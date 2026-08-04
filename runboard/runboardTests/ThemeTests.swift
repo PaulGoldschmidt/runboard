@@ -12,7 +12,7 @@ import SwiftUI
 struct ThemeTests {
 
     @Test func chartColorsCount() {
-        #expect(Theme.chartColors.count == 6)
+        #expect(Theme.chartColors.count == 12)
     }
 
     @Test func chartColorForRankOne() {
@@ -24,11 +24,17 @@ struct ThemeTests {
     }
 
     @Test func chartColorWrapsAround() {
-        #expect(Theme.chartColor(forRank: 7) == Theme.chartColor(forRank: 1))
-        #expect(Theme.chartColor(forRank: 8) == Theme.chartColor(forRank: 2))
+        #expect(Theme.chartColor(forRank: 13) == Theme.chartColor(forRank: 1))
+        #expect(Theme.chartColor(forRank: 14) == Theme.chartColor(forRank: 2))
     }
 
     @Test func chartColorLargeRank() {
-        #expect(Theme.chartColor(forRank: 13) == Theme.chartColor(forRank: 1))
+        #expect(Theme.chartColor(forRank: 25) == Theme.chartColor(forRank: 1))
+    }
+
+    @Test func chartColorForIndexMatchesRank() {
+        #expect(Theme.chartColor(forIndex: 0) == Theme.chartColor(forRank: 1))
+        #expect(Theme.chartColor(forIndex: 11) == Theme.chartColor(forRank: 12))
+        #expect(Theme.chartColor(forIndex: 12) == Theme.chartColor(forIndex: 0))
     }
 }
