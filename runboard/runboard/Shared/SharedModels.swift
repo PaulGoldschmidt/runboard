@@ -72,6 +72,16 @@ extension Array where Element == BoardMember {
     }
 }
 
+extension Array where Element == BoardMember {
+    /// Members whose data is fresh enough to show on the board. Members who
+    /// haven't submitted anything for `days` days (default: two weeks) are
+    /// hidden; the current user is always kept so their own row stays visible.
+    func activeMembers(within days: Int = 14, asOf now: Date = Date()) -> [BoardMember] {
+        let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
+        return filter { $0.isCurrentUser || $0.lastUpdated > cutoff }
+    }
+}
+
 extension BoardMember {
     fileprivate static func merge(_ group: [BoardMember]) -> BoardMember {
         let canonical = group.max { a, b in

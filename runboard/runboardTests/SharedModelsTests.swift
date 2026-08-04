@@ -130,3 +130,61 @@ struct BoardErrorTests {
         #expect(error.errorDescription == "No board found with that code.")
     }
 }
+
+// MARK: - Active Members Tests
+
+struct ActiveMembersTests {
+
+    private let now = Date(timeIntervalSince1970: 100_000_000)
+
+    private func makeMember(id: String, lastUpdated: Date, isCurrentUser: Bool = false) -> BoardMember {
+        BoardMember(
+            id: id,
+            displayName: id,
+            vo2Max: nil,
+            weeklyKilometers: 0,
+            lastUpdated: lastUpdated,
+            isCurrentUser: isCurrentUser
+        )
+    }
+
+    @Test func keepsRecentlyUpdatedMembers() {
+        let members = [
+            makeMember(id: "fresh", lastUpdated: now.addingTimeInterval(-3 * 86_400)),
+            makeMember(id: "justNow", lastUpdated: now)
+        ]
+        #expect(members.activeMembers(asOf: now).map(\.id) == ["fresh", "justNow"])
+    }
+
+    @Test func hidesMembersStaleForOverTwoWeeks() {
+        let members = [
+            makeMember(id: "stale", lastUpdated: now.addingTimeInterval(-15 * 86_400)),
+            makeMember(id: "fresh", lastUpdated: now.addingTimeInterval(-86_400))
+        ]
+        #expect(members.activeMembers(asOf: now).map(\.id) == ["fresh"])
+    }
+
+    @Test func hidesMemberAtExactlyTwoWeeks() {
+        let members = [makeMember(id: "boundary", lastUpdated: now.addingTimeInterval(-14 * 86_400))]
+        #expect(members.activeMembers(asOf: now).isEmpty)
+    }
+
+    @Test func keepsMemberJustUnderTwoWeeks() {
+        let members = [makeMember(id: "almost", lastUpdated: now.addingTimeInterval(-14 * 86_400 + 1))]
+        #expect(members.activeMembers(asOf: now).map(\.id) == ["almost"])
+    }
+
+    @Test func alwaysKeepsCurrentUser() {
+        let members = [
+            makeMember(id: "me", lastUpdated: now.addingTimeInterval(-30 * 86_400), isCurrentUser: true),
+            makeMember(id: "stale", lastUpdated: now.addingTimeInterval(-30 * 86_400))
+        ]
+        #expect(members.activeMembers(asOf: now).map(\.id) == ["me"])
+    }
+
+    @Test func customWindow() {
+        let members = [makeMember(id: "m", lastUpdated: now.addingTimeInterval(-10 * 86_400))]
+        #expect(members.activeMembers(within: 7, asOf: now).isEmpty)
+        #expect(members.activeMembers(within: 21, asOf: now).map(\.id) == ["m"])
+    }
+}

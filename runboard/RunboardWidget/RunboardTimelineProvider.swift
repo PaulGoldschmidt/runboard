@@ -110,11 +110,12 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
     }
 
     private static func sorted(_ members: [BoardMember], by statType: WidgetStatType) -> [BoardMember] {
+        let active = members.activeMembers()
         switch statType {
         case .weeklyKm:
-            return members.sorted { $0.weeklyKilometers > $1.weeklyKilometers }
+            return active.sorted { $0.weeklyKilometers > $1.weeklyKilometers }
         case .vo2Max:
-            return members.sorted { ($0.vo2Max ?? -1) > ($1.vo2Max ?? -1) }
+            return active.sorted { ($0.vo2Max ?? -1) > ($1.vo2Max ?? -1) }
         }
     }
 

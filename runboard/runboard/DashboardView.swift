@@ -104,7 +104,7 @@ struct DashboardView: View {
     // MARK: - Leaderboard
 
     private var sortedMembers: [BoardMember] {
-        let members = appState.cloudKit.members
+        let members = appState.cloudKit.members.activeMembers()
         switch selectedStat {
         case .weeklyKm:
             return members.sorted { $0.weeklyKilometers > $1.weeklyKilometers }
