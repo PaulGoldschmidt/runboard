@@ -188,3 +188,34 @@ struct ActiveMembersTests {
         #expect(members.activeMembers(within: 21, asOf: now).map(\.id) == ["m"])
     }
 }
+
+// MARK: - Current Week Kilometers Tests
+
+struct CurrentWeekKilometersTests {
+
+    private let weekStart = BoardMember.weekStart(containing: Date(timeIntervalSince1970: 1_800_000_000))
+    private var midWeek: Date { weekStart.addingTimeInterval(3 * 86_400) }
+
+    private func makeMember(km: Double, lastUpdated: Date) -> BoardMember {
+        BoardMember(id: "m", displayName: "M", vo2Max: nil, weeklyKilometers: km, lastUpdated: lastUpdated)
+    }
+
+    @Test func countsKmPushedThisWeek() {
+        let member = makeMember(km: 42.0, lastUpdated: weekStart.addingTimeInterval(3_600))
+        #expect(member.currentWeekKilometers(asOf: midWeek) == 42.0)
+    }
+
+    @Test func zeroesKmPushedBeforeThisWeek() {
+        let member = makeMember(km: 55.0, lastUpdated: weekStart.addingTimeInterval(-3_600))
+        #expect(member.currentWeekKilometers(asOf: midWeek) == 0.0)
+    }
+
+    @Test func countsKmPushedExactlyAtWeekStart() {
+        let member = makeMember(km: 12.0, lastUpdated: weekStart)
+        #expect(member.currentWeekKilometers(asOf: midWeek) == 12.0)
+    }
+
+    @Test func weekStartIsStableWithinWeek() {
+        #expect(BoardMember.weekStart(containing: midWeek) == weekStart)
+    }
+}

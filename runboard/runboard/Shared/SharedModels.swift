@@ -72,6 +72,21 @@ extension Array where Element == BoardMember {
     }
 }
 
+extension BoardMember {
+    /// Kilometers to show for the running week. `weeklyKilometers` is whatever
+    /// this member's own device last pushed; a push from before the current ISO
+    /// week is last week's total, so it counts as 0 until they sync again.
+    func currentWeekKilometers(asOf now: Date = Date()) -> Double {
+        lastUpdated >= Self.weekStart(containing: now) ? weeklyKilometers : 0
+    }
+
+    static func weekStart(containing date: Date) -> Date {
+        let calendar = Calendar(identifier: .iso8601)
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+        return calendar.date(from: components) ?? date
+    }
+}
+
 extension Array where Element == BoardMember {
     /// Members whose data is fresh enough to show on the board. Members who
     /// haven't submitted anything for `days` days (default: two weeks) are

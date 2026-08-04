@@ -331,9 +331,7 @@ final class CloudKitManager {
     }
 
     nonisolated static func currentWeekStart() -> Date {
-        let calendar = Calendar(identifier: .iso8601)
-        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
-        return calendar.date(from: components) ?? Date()
+        BoardMember.weekStart(containing: Date())
     }
 
     private func fetchMemberRecords(ids: [CKRecord.ID]) async -> [BoardMember] {

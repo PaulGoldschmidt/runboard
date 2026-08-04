@@ -47,7 +47,7 @@ enum WidgetStatType: String, AppEnum {
     func formattedValue(for member: BoardMember, compact: Bool = false) -> String {
         switch self {
         case .weeklyKm:
-            return String(format: "%.1f", member.weeklyKilometers)
+            return String(format: "%.1f", member.currentWeekKilometers())
         case .vo2Max:
             if let vo2 = member.vo2Max {
                 return String(format: compact ? "%.0f" : "%.1f", vo2)

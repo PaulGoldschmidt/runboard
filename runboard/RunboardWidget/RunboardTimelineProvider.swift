@@ -113,7 +113,7 @@ struct RunboardTimelineProvider: AppIntentTimelineProvider {
         let active = members.activeMembers()
         switch statType {
         case .weeklyKm:
-            return active.sorted { $0.weeklyKilometers > $1.weeklyKilometers }
+            return active.sorted { $0.currentWeekKilometers() > $1.currentWeekKilometers() }
         case .vo2Max:
             return active.sorted { ($0.vo2Max ?? -1) > ($1.vo2Max ?? -1) }
         }

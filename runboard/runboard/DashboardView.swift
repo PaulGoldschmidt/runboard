@@ -107,7 +107,7 @@ struct DashboardView: View {
         let members = appState.cloudKit.members.activeMembers()
         switch selectedStat {
         case .weeklyKm:
-            return members.sorted { $0.weeklyKilometers > $1.weeklyKilometers }
+            return members.sorted { $0.currentWeekKilometers() > $1.currentWeekKilometers() }
         case .vo2Max:
             return members.sorted { ($0.vo2Max ?? -1) > ($1.vo2Max ?? -1) }
         }
@@ -204,7 +204,7 @@ struct DashboardView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 switch selectedStat {
                 case .weeklyKm:
-                    Text(String(format: "%.1f", member.weeklyKilometers))
+                    Text(String(format: "%.1f", member.currentWeekKilometers()))
                         .font(Theme.headline)
                         .foregroundStyle(.white)
                     Text("KM")
