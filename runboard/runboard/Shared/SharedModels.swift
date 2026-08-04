@@ -47,16 +47,22 @@ extension Array where Element == BoardMember {
     func deduplicatedByNameAndStats() -> [BoardMember] {
         guard count > 1 else { return self }
 
-        let groups = Dictionary(grouping: self) { member in
+        let keyFor: (BoardMember) -> DedupBucketKey = { member in
             DedupBucketKey(
                 name: member.displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
                 weeklyKm: roundedToTenth(member.weeklyKilometers)
             )
         }
+        let groups = Dictionary(grouping: self, by: keyFor)
 
+        // Emit groups in first-occurrence order; iterating groups.values directly
+        // would randomize the order per process (seeded dictionary hashing).
+        var emitted = Set<DedupBucketKey>()
         var result: [BoardMember] = []
         result.reserveCapacity(groups.count)
-        for group in groups.values {
+        for member in self {
+            let key = keyFor(member)
+            guard emitted.insert(key).inserted, let group = groups[key] else { continue }
             if group.count == 1 {
                 result.append(group[0])
                 continue
