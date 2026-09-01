@@ -34,6 +34,12 @@ struct UploadCycleGateTests {
     // yield), and the watchdog killed the app. A stuck main actor can't be
     // observed from the main actor, so the triggers are raced against a
     // detached watchdog instead of being awaited directly.
+    //
+    // The watchdog is deliberately generous: the test host is the app itself,
+    // and on a cold CI simulator its main thread can be blocked for ~10 s
+    // after launch, which stalls these cycles without anything being wrong.
+    // A broken gate never finishes at all, so a long timeout costs nothing
+    // when the code is right.
     @Test func queuedTriggersNeverStallTheMainActor() async {
         let gate = await UploadCycleGate()
         let recorder = await Recorder()
@@ -46,7 +52,7 @@ struct UploadCycleGateTests {
             Task { @MainActor in await gate.run(joinRunning: true) { await recorder.cycle() } },
         ]
 
-        let outcome = await race({ for trigger in triggers { await trigger.value } }, timeout: .seconds(5))
+        let outcome = await race({ for trigger in triggers { await trigger.value } }, timeout: .seconds(60))
         guard outcome == .completed else {
             Issue.record("triggers never finished — the gate is spinning on the main actor")
             return
