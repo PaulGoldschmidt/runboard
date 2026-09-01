@@ -18,6 +18,11 @@ final class BackgroundSyncCoordinator {
         case foreground
         case observer(HKSampleType)
         case bgAppRefresh
+
+        var isForeground: Bool {
+            if case .foreground = self { return true }
+            return false
+        }
     }
 
     static let appRefreshIdentifier = "p3g3.runboard.refresh"
@@ -30,8 +35,7 @@ final class BackgroundSyncCoordinator {
     private var observerQueries: [HKObserverQuery] = []
     private var didEnableBackgroundDelivery = false
     private var lastSyncAt: Date = .distantPast
-    private var inflight: Task<Void, Never>?
-    private var cycleGeneration = 0
+    private let cycles = UploadCycleGate()
 
     private init() {}
 
@@ -120,22 +124,11 @@ final class BackgroundSyncCoordinator {
             return
         }
 
-        while let existing = inflight {
-            await existing.value
-            if case .foreground = trigger { return }
-        }
-
-        let task = Task { @MainActor in
+        // A foreground refresh only needs the result of *a* cycle, so it joins
+        // one already in flight; observer wakes and BGTask runs each get their
+        // own cycle behind it so newly delivered samples are never skipped.
+        await cycles.run(joinRunning: trigger.isForeground) { [self] in
             await performUpload(trigger: trigger)
-        }
-        cycleGeneration += 1
-        let generation = cycleGeneration
-        inflight = task
-        await task.value
-        // Another trigger may have replaced inflight while we were suspended;
-        // only clear our own registration or its cycle would run untracked.
-        if cycleGeneration == generation {
-            inflight = nil
         }
     }
 
