@@ -2,6 +2,14 @@
 
 Runboard turns every weekly run into a head-to-head competition with the people you actually care about beating. Create a board, share a code, and watch the leaderboard come alive — powered by the runs you're already tracking in Apple Health.
 
+<a href="https://loc-history.com/?repos=PaulGoldschmidt/runboard&style=sketch">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://loc-history.com/svg?repos=PaulGoldschmidt/runboard&style=sketch&theme=dark">
+    <source media="(prefers-color-scheme: light)" srcset="https://loc-history.com/svg?repos=PaulGoldschmidt/runboard&style=sketch&theme=light">
+    <img alt="Lines of code in this repository over time" src="https://loc-history.com/svg?repos=PaulGoldschmidt/runboard&style=sketch&theme=light">
+  </picture>
+</a>
+
 ## How it works
 
 1. Create a board and get a 6-character invite code.
